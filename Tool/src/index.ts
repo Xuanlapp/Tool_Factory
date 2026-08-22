@@ -214,7 +214,7 @@ async function getPngImages(directoryPath) {
         .map((entry) => entry.name)
         .sort((left, right) => left.localeCompare(right, "en"));
     if (pngFiles.length === 0) {
-        throw new Error(`Kh?ng t?m th?y file .png trong th? m?c ${directoryPath}`);
+        throw new Error(`Không tìm thấy file .png trong thư mục ${directoryPath}`);
     }
     return pngFiles.map((fileName) => path.join(directoryPath, fileName));
 }
@@ -1063,7 +1063,7 @@ async function saveAiWithRetry(openDocumentPath, saveScriptPath, outputAiPath, v
             await sleep(3000);
         }
     }
-    throw new Error('Kh?ng th? l?u AI: ' + lastMessage);
+    throw new Error('Không thể lưu AI: ' + lastMessage);
 }
 async function main() {
     if (IGNORE_CHECK_FALSE)
@@ -1111,7 +1111,7 @@ async function main() {
                 }
             }
             else {
-                console.log('Images ?? h?t PNG, d?ng l?i.');
+                console.log('Images đã hết PNG, dừng lại.');
             }
             break;
         }
@@ -1313,7 +1313,7 @@ async function main() {
                         if (!isNoFit && !errorMovedPaths.has(unit.job.imagePath)) {
                             await moveImageToError(unit.job.imagePath, reasonText, {
                                 step: messageText,
-                                expected: Number(unit.job.sideCount) >= 2 ? '6 ch?nh l?ch Lazer-Front/Back ph?i b?ng nhau' : '3 ch?nh l?ch Lazer-Front/Back ph?i b?ng nhau',
+                                expected: Number(unit.job.sideCount) >= 2 ? '6 chênh lệch Lazer-Front/Back phải bằng nhau' : '3 chênh lệch Lazer-Front/Back phải bằng nhau',
                                 actual: reasonText,
                             });
                             errorMovedPaths.add(unit.job.imagePath);
@@ -1321,7 +1321,7 @@ async function main() {
                         }
                         if (result && !isSkip) {
                             const extraReasonText = result.reason ? ' (' + fixVietnameseMojibake(String(result.reason)) + ')' : '';
-                            console.log((isNoFit ? 'No fit' : 'Item l?i') + ': ' + unit.job.imageBaseName + ' at qty ' + unit.qtyIndex + extraReasonText + '; continue other sizes.');
+                            console.log((isNoFit ? 'No fit' : 'Item lỗi') + ': ' + unit.job.imageBaseName + ' at qty ' + unit.qtyIndex + extraReasonText + '; continue other sizes.');
                         }
                         continue;
                     }
@@ -1357,7 +1357,7 @@ async function main() {
         }
         await processQueue();
         if (CHECK_FULL_PIPELINE) {
-            console.log(placedAnything ? 'CHECK_RESULT: true | gi? Illustrator m? ?? b?n xem k?t qu?.' : 'CHECK_RESULT: false | gi? Illustrator m? ?? b?n xem l?i.');
+            console.log(placedAnything ? 'CHECK_RESULT: true | giữ Illustrator mở để bạn xem kết quả.' : 'CHECK_RESULT: false | giữ Illustrator mở để bạn xem lỗi.');
             break;
         }
         if (!placedAnything || sheetUpdates.length === 0) {
@@ -1374,7 +1374,7 @@ async function main() {
                 sheetIndex += 1;
                 continue;
             }
-            console.log('Kh?ng c? item n?o fit tr?n sheet n?y; gi? nguy?n PNG trong Images.');
+            console.log('Không có item nào fit trên sheet này; giữ nguyên PNG trong Images.');
             break;
         }
         const pendingCommitPayload = {
@@ -1442,10 +1442,10 @@ async function main() {
         console.log('Saved AI output: ' + outputInfo.filePath);
         sheetIndex += 1;
     }
-    console.log('Ho?n t?t l?nh test.');
+    console.log('Hoàn tất lệnh test.');
 }
 main().catch((error) => {
-    console.error('Tool chay loi:', error instanceof Error ? error.message : error);
+    console.error('Tool chạy lỗi:', error instanceof Error ? error.message : error);
     process.exitCode = 1;
 });
 

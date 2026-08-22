@@ -1,4 +1,4 @@
-﻿import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import { createReadStream, existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'node:fs';
 import { readdir, stat } from 'node:fs/promises';
@@ -136,7 +136,7 @@ function moveFolderContents(fromDir: string, toDir: string) {
 function resolveFileInside(root: string, relativePath: string) {
   const resolvedRoot = path.resolve(root);
   const resolvedFile = path.resolve(resolvedRoot, relativePath);
-  if (resolvedFile !== resolvedRoot && !resolvedFile.startsWith(resolvedRoot + path.sep)) throw new Error('ÄÆ°á»ng dáº«n file khÃ´ng há»£p lá»‡.');
+  if (resolvedFile !== resolvedRoot && !resolvedFile.startsWith(resolvedRoot + path.sep)) throw new Error('Đường dẫn file không hợp lệ.');
   return resolvedFile;
 }
 
@@ -144,7 +144,7 @@ function moveErrorToProcessed(relativePath: string) {
   const sourceRoot = folderPaths.images_error;
   const targetRoot = folderPaths.images_processed;
   const source = resolveFileInside(sourceRoot, relativePath);
-  if (!existsSync(source) || !fs.statSync(source).isFile()) throw new Error('KhÃ´ng tÃ¬m tháº¥y áº£nh lá»—i cáº§n xá»­ lÃ½.');
+  if (!existsSync(source) || !fs.statSync(source).isFile()) throw new Error('Không tìm thấy ảnh lỗi cần xử lý.');
   const target = resolveFileInside(targetRoot, relativePath);
   mkdirSync(path.dirname(target), { recursive: true });
   let finalTarget = target;
@@ -192,7 +192,7 @@ function restoreToolState() {
     activeRun = saved.run;
     if (!activeRun.kind) activeRun.kind = 'tool';
     if (activeRun.status === 'running') {
-      activeRun.logs.push('App server ?? kh?i ??ng l?i; ?ang k?t n?i l?i ti?n tr?nh n?n...');
+      activeRun.logs.push('Máy chủ ứng dụng đã khởi động lại; đang kết nối lại tiến trình nền...');
       activeRun.lastLogAt = new Date().toISOString();
     }
   } catch {}
@@ -255,7 +255,7 @@ function stopTool() {
   if (activeRun) activeRun.stopping = true;
   killProcessTree(activeChild, activeRun?.runnerPid);
   activeChild = null;
-  if (activeRun?.status === 'running') { activeRun.status = 'error'; activeRun.endedAt = new Date().toISOString(); activeRun.logs.push('ÄÃ£ dá»«ng Tool theo yÃªu cáº§u.'); }
+  if (activeRun?.status === 'running') { activeRun.status = 'error'; activeRun.endedAt = new Date().toISOString(); activeRun.logs.push('Đã dừng Tool theo yêu cầu.'); }
   broadcastToolStatus();
   void snapshot(true);
   return toolStatus();
@@ -294,10 +294,10 @@ function resolveOutputAiPath(relativePath: string) {
   if (inferredRelativePath) {
     const inferredPath = path.resolve(root, inferredRelativePath);
     if (existsSync(inferredPath)) return inferredPath;
-    throw new Error('KhÃ´ng tÃ¬m tháº¥y file AI theo ngÃ y trong output_ai: ' + inferredRelativePath);
+    throw new Error('Không tìm thấy file AI theo ngày trong output_ai: ' + inferredRelativePath);
   }
 
-  throw new Error('KhÃ´ng tÃ¬m tháº¥y file AI trong output_ai: ' + relativePath);
+  throw new Error('Không tìm thấy file AI trong output_ai: ' + relativePath);
 }
 function processExists(pid?: number) {
   if (!pid) return false;
@@ -323,7 +323,7 @@ function syncPersistentOperation() {
       const result = JSON.parse(readFileSync(activeRun.resultPath, 'utf8')) as { status: 'completed' | 'error'; exitCode?: number | null; endedAt?: string; message?: string };
       activeRun.status = result.status;
       activeRun.exitCode = result.exitCode;
-      activeRun.logs.push(result.status === 'completed' ? 'Export hoÃ n táº¥t thÃ nh cÃ´ng.' : `Export tháº¥t báº¡i \(mÃ£ ${result.exitCode ?? 'khÃ´ng xÃ¡c Ä‘á»‹nh'}).`);
+      activeRun.logs.push(result.status === 'completed' ? 'Export hoàn tất thành công.' : `Export thất bại \(mã ${result.exitCode ?? 'không xác định'}).`);
       activeRun.endedAt = result.endedAt ?? new Date().toISOString();
       if (result.message) activeRun.logs.push(result.message);
       activeChild = null;
@@ -335,7 +335,7 @@ function syncPersistentOperation() {
   if (activeRun.runnerPid && !processExists(activeRun.runnerPid)) {
     activeRun.status = 'error';
     activeRun.endedAt = new Date().toISOString();
-    activeRun.logs.push('Tiáº¿n trÃ¬nh ná»n Ä‘Ã£ dá»«ng nhÆ°ng khÃ´ng ghi Ä‘Æ°á»£c káº¿t quáº£.');
+    activeRun.logs.push('Tiến trình nền đã dừng nhưng không ghi được kết quả.');
     broadcastToolStatus();
   }
 }
@@ -456,24 +456,24 @@ function markWaitPrinted(waitRelativePath: string) {
 }
 
 function runExport(outputAiRelativePath: string, assets: ExportAssetKind[]) {
-  if (activeRun?.status === 'running') return { ok: false, message: 'Äang cÃ³ tiáº¿n trÃ¬nh khÃ¡c cháº¡y.', run: activeRun };
+  if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
   const outputAiPath = resolveOutputAiPath(outputAiRelativePath);
   const selected: ExportAssetKind[] = assets.length ? assets : ['front', 'back', 'lazer'];
   const run: ToolRun = { id: `export-${Date.now()}`, kind: 'export', command: 'check', status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: [`> export bundle: ${selected.join(', ')}`], exportAssets: selected, outputAiRelativePath };
   launchPersistentOperation(run, 'node', [path.join(toolDir, 'dist-bundle', 'test-export-output-assets.cjs'), outputAiPath], { ACRYLIC_EXPORT_ASSETS: selected.join(',') });
-  return { ok: true, message: 'ÄÃ£ báº¯t Ä‘áº§u export.', run: activeRun };
+  return { ok: true, message: 'Đã bắt đầu export.', run: activeRun };
 }
 
 function runTool(command: ToolCommand) {
-  if (activeRun?.status === 'running') return { ok: false, message: 'Äang cÃ³ tiáº¿n trÃ¬nh khÃ¡c cháº¡y.', run: activeRun };
+  if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
   const commandEnv: Record<string, string> = command === 'error'
-    ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
+    ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: '18', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
     : command === 'check'
       ? { ACRYLIC_CHECK_FULL_PIPELINE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
       : { ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: '18', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
-  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> cháº¡y Tool bundle: ' + command] };
+  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
   launchPersistentOperation(run, 'node', [path.join(toolDir, 'dist-bundle', 'index.cjs')], commandEnv);
-  return { ok: true, message: 'ÄÃ£ cháº¡y Tool ' + command + '.', run: activeRun };
+  return { ok: true, message: 'Đã chạy Tool ' + command + '.', run: activeRun };
 }
 
 ensureOperationMonitor();
@@ -616,13 +616,13 @@ async function ensureWaitPreview(waitFilePath: string) {
 }
 
 function formatDurationMs(milliseconds: number) {
-  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return '0 phÃºt';
+  if (!Number.isFinite(milliseconds) || milliseconds <= 0) return '0 phút';
   const totalMinutes = Math.max(1, Math.round(milliseconds / 60000));
   const hours = Math.floor(totalMinutes / 60);
   const minutes = totalMinutes % 60;
-  if (hours <= 0) return `${minutes} phÃºt`;
-  if (minutes <= 0) return `${hours} giá»`;
-  return `${hours} giá» ${minutes} phÃºt`;
+  if (hours <= 0) return `${minutes} phút`;
+  if (minutes <= 0) return `${hours} giờ`;
+  return `${hours} giờ ${minutes} phút`;
 }
 
 function readOperationHistory() {
@@ -647,10 +647,10 @@ function readOperationHistory() {
       const errorCount = logLines.filter((line) => /\bERROR\b|CHECK_COMPARE_FALSE|Tool chay loi|Tool ket thuc voi ma/i.test(line)).length;
       const status = String(result.status ?? 'completed') === 'completed' && Number(result.exitCode ?? 0) === 0 ? 'completed' : String(result.status ?? 'failed');
       const specArgs = Array.isArray(spec.args) ? spec.args : [];
-      const currentFile = String((logLines.find((line) => /^Sheet\s+\d+:/i.test(line)) ?? logLines.find((line) => /^Saved .*wait AI/i.test(line)) ?? specArgs[specArgs.length - 1] ?? spec.kind ?? 'â€”'));
+      const currentFile = String((logLines.find((line) => /^Sheet\s+\d+:/i.test(line)) ?? logLines.find((line) => /^Saved .*wait AI/i.test(line)) ?? specArgs[specArgs.length - 1] ?? spec.kind ?? '—'));
       const timeline = logLines.slice(-80).map((line, index) => ({
         time: `${String(index + 1).padStart(2,'0')}:00`,
-        event: /ERROR|FALSE/i.test(line) ? 'Lá»—i' : /PACKING/i.test(line) ? 'Äang xáº¿p' : /TRACE_LAZER/i.test(line) ? 'Trace lazer' : /DONE|DONE_BATCH/i.test(line) ? 'HoÃ n táº¥t' : /Saved/i.test(line) ? 'ÄÃ£ lÆ°u' : 'Log',
+        event: /ERROR|FALSE/i.test(line) ? 'Lỗi' : /PACKING/i.test(line) ? 'Đang xếp' : /TRACE_LAZER/i.test(line) ? 'Trace lazer' : /DONE|DONE_BATCH/i.test(line) ? 'Hoàn tất' : /Saved/i.test(line) ? 'Đã lưu' : 'Log',
         message: line,
         level: /ERROR|FALSE|Tool chay loi|Tool ket thuc voi ma/i.test(line) ? 'error' : /waiting instead of killing/i.test(line) ? 'warning' : 'info',
       }));
@@ -660,7 +660,7 @@ function readOperationHistory() {
         command: String(Array.isArray(spec.args) ? spec.args.join(' ') : ''),
         startedAt,
         endedAt,
-        duration: endedDate ? formatDurationMs(endedDate.getTime() - startedDate.getTime()) : 'Äang cháº¡y',
+        duration: endedDate ? formatDurationMs(endedDate.getTime() - startedDate.getTime()) : 'Đang chạy',
         sheets: sheetCount,
         items: itemCount,
         errors: errorCount,
@@ -687,14 +687,14 @@ function localFilesystemApi(): Plugin {
           const relativePath = url.searchParams.get('path') ?? '';
           const waitRoot = path.resolve(folderPaths.wait);
           const sourcePath = path.resolve(waitRoot, relativePath);
-          if (!relativePath || !sourcePath.toLowerCase().startsWith(waitRoot.toLowerCase() + path.sep)) return json(response, { ok: false, message: 'File wait khÃ´ng há»£p lá»‡.' }, 400);
+          if (!relativePath || !sourcePath.toLowerCase().startsWith(waitRoot.toLowerCase() + path.sep)) return json(response, { ok: false, message: 'File wait không hợp lệ.' }, 400);
           try {
             const previewPath = await ensureWaitPreview(sourcePath);
             response.setHeader('Content-Type', 'image/png');
             response.setHeader('Cache-Control', 'no-store, max-age=0');
             createReadStream(previewPath).pipe(response);
           } catch (error) {
-            json(response, { ok: false, message: error instanceof Error && error.message === 'TOOL_BUSY' ? 'Tool Ä‘ang cháº¡y nÃªn chÆ°a thá»ƒ táº¡o preview.' : 'KhÃ´ng thá»ƒ táº¡o preview file wait.' }, error instanceof Error && error.message === 'TOOL_BUSY' ? 409 : 500);
+            json(response, { ok: false, message: error instanceof Error && error.message === 'TOOL_BUSY' ? 'Tool đang chạy nên chưa thể tạo preview.' : 'Không thể tạo preview file wait.' }, error instanceof Error && error.message === 'TOOL_BUSY' ? 409 : 500);
           }
           return;
         }
@@ -763,10 +763,10 @@ function localFilesystemApi(): Plugin {
               const payload = body ? JSON.parse(body) : {};
               const outputAiRelativePath = String(payload.outputAiRelativePath ?? '');
               const assets = Array.isArray(payload.assets) ? payload.assets.filter((item: unknown) => ['front', 'back', 'lazer'].includes(String(item))) as ExportAssetKind[] : [];
-              if (!outputAiRelativePath) return json(response, { ok: false, message: 'Thiáº¿u file AI Ä‘á»ƒ export.', run: toolStatus().run }, 400);
+              if (!outputAiRelativePath) return json(response, { ok: false, message: 'Thiếu file AI để export.', run: toolStatus().run }, 400);
               json(response, runExport(outputAiRelativePath, assets));
             } catch (error) {
-              json(response, { ok: false, message: `khÃ´ng tá»ƒ export: ${error instanceof Error ? error.message : String(error)}`, run: toolStatus().run }, 500);
+              json(response, { ok: false, message: `không tể export: ${error instanceof Error ? error.message : String(error)}`, run: toolStatus().run }, 500);
             }
           });
           return;
@@ -780,18 +780,18 @@ function localFilesystemApi(): Plugin {
             try {
               payload = body ? JSON.parse(body) : {};
             } catch {
-              json(response, { ok: false, message: 'Dá»¯ liá»‡u gá»­i lÃªn khÃ´ng pháº£i JSON há»£p lá»‡.', run: toolStatus().run }, 400);
+              json(response, { ok: false, message: 'Dữ liệu gửi lên không phải JSON hợp lệ.', run: toolStatus().run }, 400);
               return;
             }
             const command = payload.command;
             if (!['start', 'error', 'check'].includes(String(command))) {
-              json(response, { ok: false, message: 'Lá»‡nh Tool khÃ´ng há»£p lá»‡.', run: toolStatus().run }, 400);
+              json(response, { ok: false, message: 'Lệnh Tool không hợp lệ.', run: toolStatus().run }, 400);
               return;
             }
             try {
               json(response, runTool(command as ToolCommand));
             } catch (error) {
-              json(response, { ok: false, message: `khÃ´ng tá»ƒ kh?i ??ng Tool: ${error instanceof Error ? error.message : String(error)}`, run: toolStatus().run }, 500);
+              json(response, { ok: false, message: `không tể kh?i ??ng Tool: ${error instanceof Error ? error.message : String(error)}`, run: toolStatus().run }, 500);
             }
           });
           return;
@@ -823,11 +823,11 @@ function localFilesystemApi(): Plugin {
             try {
               const parsed = JSON.parse(body || '{}') as { relativePath?: unknown };
               const relativePath = String(parsed.relativePath ?? '').trim();
-              if (!relativePath) return json(response, { ok: false, message: 'Thiáº¿u Ä‘Æ°á»ng dáº«n áº£nh lá»—i.' }, 400);
+              if (!relativePath) return json(response, { ok: false, message: 'Thiếu đường dẫn ảnh lỗi.' }, 400);
               const processedRelativePath = moveErrorToProcessed(relativePath);
               return json(response, { ok: true, message: 'Đã chuyển ảnh sang thư mục images_processed.', relativePath: processedRelativePath });
             } catch (error) {
-              return json(response, { ok: false, message: error instanceof Error ? error.message : 'KhÃ´ng thá»ƒ chuyá»ƒn áº£nh Ä‘Ã£ xá»­ lÃ½.' }, 400);
+              return json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể chuyển ảnh đã xử lý.' }, 400);
             }
           });
           return;
@@ -847,12 +847,12 @@ function localFilesystemApi(): Plugin {
                 const normalized = normalizeFolderPath(String(value ?? ''));
                 normalizedPaths[key] = normalized;
                 if (normalized.warning || !normalized.normalizedPath) {
-                  const message = normalized.warning ?? '???ng d?n th? m?c kh?ng h?p l?.';
+                  const message = normalized.warning ?? 'Đường dẫn thư mục không hợp lệ.';
                   warnings[key] = message;
                   return json(response, { ok:false, message, normalizedPaths, warnings }, 409);
                 }
                 const health = canAccessFolder(normalized.normalizedPath);
-                if (!health.reachable) return json(response, { ok:false, message: health.warning ?? 'Kh?ng truy c?p ???c th? m?c m?i.', normalizedPaths, warnings: { [key]: health.warning } }, 409);
+                if (!health.reachable) return json(response, { ok:false, message: health.warning ?? 'Không truy cập được thư mục mới.', normalizedPaths, warnings: { [key]: health.warning } }, 409);
                 submittedPaths[key] = normalized.normalizedPath;
               }
               const nextPaths = { ...folderPaths, ...submittedPaths };

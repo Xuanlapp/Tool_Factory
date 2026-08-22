@@ -1,4 +1,4 @@
-﻿const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
+const { app, BrowserWindow, shell, dialog, ipcMain } = require('electron');
 const { autoUpdater } = require('electron-updater');
 const { spawn } = require('node:child_process');
 const fs = require('node:fs');
@@ -24,17 +24,17 @@ function setupAutoUpdater() {
   if (!app.isPackaged || debug || process.env.ACRYLIC_DISABLE_AUTO_UPDATE === '1') return;
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
-  autoUpdater.on('error', (error) => console.error('Kh?ng th? ki?m tra b?n c?p nh?t:', error.message));
+  autoUpdater.on('error', (error) => console.error('Không thể kiểm tra bản cập nhật:', error.message));
   autoUpdater.on('update-available', async (info) => {
-    const result = await dialog.showMessageBox({ type: 'info', buttons: ['T?i b?n m?i', '?? sau'], defaultId: 0, cancelId: 1, title: 'C? b?n c?p nh?t m?i', message: `Acrylic Factory ${info.version} ?? c? s?n.`, detail: 'B?n c?p nh?t s? ???c t?i n?n v? ch? c?i khi b?n x?c nh?n.' });
-    if (result.response === 0) { try { await autoUpdater.downloadUpdate(); } catch (error) { console.error('Kh?ng th? t?i b?n c?p nh?t:', error); } }
+    const result = await dialog.showMessageBox({ type: 'info', buttons: ['Tải bản mới', 'Để sau'], defaultId: 0, cancelId: 1, title: 'Có bản cập nhật mới', message: `Acrylic Factory ${info.version} đã có sẵn.`, detail: 'Bản cập nhật sẽ được tải nền và chỉ cài khi bạn xác nhận.' });
+    if (result.response === 0) { try { await autoUpdater.downloadUpdate(); } catch (error) { console.error('Không thể tải bản cập nhật:', error); } }
   });
   autoUpdater.on('update-downloaded', async () => {
     updateDownloaded = true;
-    const result = await dialog.showMessageBox({ type: 'info', buttons: ['Kh?i ??ng l?i v? c?p nh?t', '?? sau'], defaultId: 0, cancelId: 1, title: '?? t?i xong b?n c?p nh?t', message: 'B?n c?p nh?t ?? s?n s?ng.', detail: 'H?y d?ng Tool/Export tr??c khi kh?i ??ng l?i ?ng d?ng.' });
+    const result = await dialog.showMessageBox({ type: 'info', buttons: ['Khởi động lại và cập nhật', 'Để sau'], defaultId: 0, cancelId: 1, title: 'Đã tải xong bản cập nhật', message: 'Bản cập nhật đã sẵn sàng.', detail: 'Hãy dừng Tool/Export trước khi khởi động lại ứng dụng.' });
     if (result.response === 0) {
       if (await isToolBusy()) {
-        await dialog.showMessageBox({ type: 'warning', buttons: ['OK'], title: 'Ch?a th? c?p nh?t', message: 'Tool ho?c Export v?n ?ang ch?y.', detail: 'Vui l?ng d?ng ti?n tr?nh hi?n t?i r?i m? l?i th?ng b?o c?p nh?t.' });
+        await dialog.showMessageBox({ type: 'warning', buttons: ['OK'], title: 'Chưa thể cập nhật', message: 'Tool hoặc Export vẫn đang chạy.', detail: 'Vui lòng dừng tiến trình hiện tại rồi mở lại thông báo cập nhật.' });
         return;
       }
       autoUpdater.quitAndInstall(false, true);

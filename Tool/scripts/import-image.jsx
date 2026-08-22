@@ -1255,7 +1255,7 @@ function drawDebug(caseLayer, bounds, label) {
 }
 
 function report(label, mask, bounds) {
-  if (bounds === null) return label + '\nfalse\nKh?ng t?m th?y ? m?u trong mask';
+  if (bounds === null) return label + '\nfalse\nKhông tìm thấy ô màu trong mask';
   var mb = boundsOf(mask);
   var leftCm = ptToCm(bounds.left - mb.left);
   var topCm = ptToCm(mb.top - bounds.top);

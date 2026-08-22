@@ -1,4 +1,4 @@
-﻿param([string]$Root = 'D:\FFACTORY\Arcylic')
+param([string]$Root = 'D:\FFACTORY\Arcylic')
 $ErrorActionPreference = 'Stop'
 $assetRoot = Split-Path -Parent $PSScriptRoot
 $setupVersion = '2026-08-22.1'
@@ -12,7 +12,7 @@ function Save-Progress {
 function Step($name, [scriptblock]$action) {
   try {
     & $action
-    $steps.Add([pscustomobject]@{ name = $name; ok = $true; message = 'HoÃ n thÃ nh' })
+    $steps.Add([pscustomobject]@{ name = $name; ok = $true; message = 'Hoàn thành' })
   } catch {
     $steps.Add([pscustomobject]@{ name = $name; ok = $false; message = $_.Exception.Message })
     Save-Progress
@@ -21,19 +21,19 @@ function Step($name, [scriptblock]$action) {
   Save-Progress
 }
 try {
-  Step 'Táº¡o toÃ n bá»™ thÆ° má»¥c dá»¯ liá»‡u' {
+  Step 'Tạo toàn bộ thư mục dữ liệu' {
     @('Images','images_error','images_processed','imgaes_done','wait','output_ai','output_front','output_back','output_lazer','template','.runtime','.runtime\operations','.runtime\wait-assets','.runtime\wait-previews','.runtime\png-cache') | ForEach-Object { New-Item -ItemType Directory -Force -Path (Join-Path $Root $_) | Out-Null }
   }
-  Step 'Sao chÃ©p template máº·c Ä‘á»‹nh' {
+  Step 'Sao chép template mặc định' {
     $templateSource = Join-Path $assetRoot 'app-assets\templates'
     $templateTarget = Join-Path $Root 'template'
     if (Test-Path -LiteralPath $templateSource) { Get-ChildItem -LiteralPath $templateSource -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $templateTarget $_.Name) -Force } }
   }
-  Step 'Kiá»ƒm tra hoáº·c cÃ i Node.js' {
+  Step 'Kiểm tra hoặc cài Node.js' {
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) { if (Get-Command winget -ErrorAction SilentlyContinue) { winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements } else { throw 'Thiếu Node.js và máy không có winget.' } }
     node --version
   }
-  Step 'Kiá»ƒm tra hoáº·c cÃ i Python' {
+  Step 'Kiểm tra hoặc cài Python' {
     if (-not (Get-Command python -ErrorAction SilentlyContinue)) { if (Get-Command winget -ErrorAction SilentlyContinue) { winget install Python.Python.3.12 --silent --accept-package-agreements --accept-source-agreements } else { throw 'Thiếu Python và máy không có winget.' } }
     python --version
   }
@@ -41,7 +41,7 @@ try {
   Step 'Cài package của ứng dụng' { Push-Location $Root; npm install; Pop-Location }
   Step 'Cài package của Tool' { Push-Location (Join-Path $Root 'Tool'); npm install; Pop-Location }
   Step 'Build Tool' { Push-Location (Join-Path $Root 'Tool'); npm run build; Pop-Location }
-  Step 'Build giao diá»‡n á»©ng dá»¥ng' { Push-Location $Root; npm --workspace @acrylic/web run build; Pop-Location }
+  Step 'Build giao diện ứng dụng' { Push-Location $Root; npm --workspace @acrylic/web run build; Pop-Location }
   $illustratorInstalled = [bool](Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths\Illustrator.exe' -ErrorAction SilentlyContinue)
   $payload = [pscustomobject]@{ status = 'completed'; setupVersion = $setupVersion; updatedAt = (Get-Date).ToString('o'); steps = $steps; illustratorInstalled = $illustratorInstalled }
 } catch {

@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Activity, CheckCircle2, CircleAlert, CircleCheckBig, Clock3, Loader2, Play, TerminalSquare, XCircle } from 'lucide-react';
 import { apiBase, vietnamDateTime } from '../api/client';
 import { Panel } from '../components/Panel';
@@ -16,8 +16,8 @@ type SnapshotEvent = { kpi?: { queue?: number } };
 function fixVietnameseLog(value: string) {
   let text = String(value ?? '');
   const replacements: Array<[string, string]> = [
-    ['kh??ng', 'kh?ng'], ['c??n', 'c?n'], ['tr??i', 'tr?i'], ['ph???i', 'ph?i'], ['l???ch', 'l?ch'],
-    ['Kh??ng', 'Kh?ng'], ['Lazer kh??ng c??n tr??i/ph???i', 'Lazer kh?ng c?n tr?i/ph?i'],
+    ['kh?ng', 'kh?ng'], ['c?n', 'c?n'], ['tr?i', 'tr?i'], ['ph?i', 'ph?i'], ['l?ch', 'l?ch'],
+    ['Kh?ng', 'Kh?ng'], ['Lazer kh?ng c?n tr?i/ph?i', 'Lazer kh?ng c?n tr?i/ph?i'],
     ['kh?ng', 'kh?ng'], ['c?n', 'c?n'], ['tr?i', 'tr?i'], ['ph?i', 'ph?i'], ['l?ch', 'l?ch'],
   ];
   for (const [from, to] of replacements) text = text.split(from).join(to);

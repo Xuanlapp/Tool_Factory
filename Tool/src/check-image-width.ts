@@ -1,4 +1,4 @@
-﻿import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
+import { access, mkdir, readFile, readdir, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -101,7 +101,7 @@ async function resolveImagePath() {
     const firstPng = await findFirstPng(candidateDir);
     if (firstPng) return firstPng;
   }
-  throw new Error(`Kh?ng t?m th?y PNG test. H?y ch?y: npm run check -- "D:\\duong-dan\\anh.png"`);
+  throw new Error(`Không tìm thấy PNG test. Hãy chạy: npm run check -- "D:\\duong-dan\\anh.png"`);
 }
 
 async function main() {

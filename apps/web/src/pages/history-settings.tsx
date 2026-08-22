@@ -1,4 +1,4 @@
-﻿import { memo, useEffect, useMemo, useState } from 'react';
+import { memo, useEffect, useMemo, useState } from 'react';
 import { CalendarDays, CircleCheckBig, FileImage, FolderOpen, LoaderCircle, PlayCircle, Search, Shapes, TriangleAlert } from 'lucide-react';
 import { apiBase } from '../api/client';
 import type { DashboardData } from '../api/types';
@@ -76,7 +76,7 @@ export const HistoryPage = memo(HistoryPageView, (previous, next) => previous.da
 export function SettingsPage({ data }: { data: DashboardData }) {
   const [setup, setSetup] = useState<{ status: string; steps?: Array<{ name: string; ok: boolean; message: string }>; message?: string; updatedAt?: string | null; setupVersion?: string | null; currentSetupVersion?: string | null; setupRequired?: boolean }>({ status: 'idle', steps: [] });
   const loadSetup = async () => { try { setSetup(await (await fetch(apiBase + '/setup/status')).json()); } catch {} };
-  const runSetup = async () => { const response = await fetch(apiBase + '/setup/run', { method: 'POST' }); const payload = await response.json() as { ok?: boolean; message?: string }; if (payload.ok) setSetup((current) => ({ ...current, status: 'running', steps: [], setupRequired: false, message: 'Đang thiết lập máy này. Có thể mất vài phút khi cÃ i package.' })); else setSetup((current) => ({ ...current, status: 'error', message: payload.message ?? 'Không thể bắt đầu setup.' })); };
+  const runSetup = async () => { const response = await fetch(apiBase + '/setup/run', { method: 'POST' }); const payload = await response.json() as { ok?: boolean; message?: string }; if (payload.ok) setSetup((current) => ({ ...current, status: 'running', steps: [], setupRequired: false, message: 'Đang thiết lập máy này. Có thể mất vài phút khi cài package.' })); else setSetup((current) => ({ ...current, status: 'error', message: payload.message ?? 'Không thể bắt đầu setup.' })); };
   useEffect(() => { void loadSetup(); const timer = window.setInterval(loadSetup, 2000); return () => window.clearInterval(timer); }, []);
 
   const folderLabels: Record<string, string> = {

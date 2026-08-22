@@ -1,4 +1,4 @@
-﻿import type { AgentSnapshot, FolderFileEntry, RunnerStatus } from '@acrylic/contracts';
+import type { AgentSnapshot, FolderFileEntry, RunnerStatus } from '@acrylic/contracts';
 import { apiBase, demoMode, fileDate, fileSize, fileTime, parseFileIdentity, parseItemName, parseSizeInch, readJson, sortLikeTool, vietnamTime } from './client';
 import { mockData } from './mock';
 import type { DashboardData, DashboardSummary, DoneItem, ErrorItem, OutputGroup, QueueItem, RunHistory, SettingsView, SheetView, SideMode, WaitFile, WaitItem } from './types';
@@ -15,10 +15,10 @@ const WAIT_MIN_CAP_INCH = 3;
 function fixVietnameseText(value: unknown) {
   let text = String(value ?? '');
   const replacements: Array<[string, string]> = [
-    ['kh??ng', 'kh?ng'], ['c??n', 'c?n'], ['tr??i', 'tr?i'], ['ph???i', 'ph?i'], ['l???ch', 'l?ch'],
-    ['Kh??ng', 'Kh?ng'], ['Lazer kh??ng c??n tr??i/ph???i', 'Lazer kh?ng c?n tr?i/ph?i'],
     ['kh?ng', 'kh?ng'], ['c?n', 'c?n'], ['tr?i', 'tr?i'], ['ph?i', 'ph?i'], ['l?ch', 'l?ch'],
-    ['d?????i', 'd??i'], ['?????t', '??t'], ['??i???u ki???n', '?i?u ki?n'],
+    ['Kh?ng', 'Kh?ng'], ['Lazer kh?ng c?n tr?i/ph?i', 'Lazer kh?ng c?n tr?i/ph?i'],
+    ['kh?ng', 'kh?ng'], ['c?n', 'c?n'], ['tr?i', 'tr?i'], ['ph?i', 'ph?i'], ['l?ch', 'l?ch'],
+    ['d??i', 'd??i'], ['??t', '??t'], ['?i?u ki?n', '?i?u ki?n'],
   ];
   for (const [from, to] of replacements) text = text.split(from).join(to);
   return text;
