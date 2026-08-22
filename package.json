@@ -1,0 +1,28 @@
+{
+  "name": "acrylic-production-platform",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:agent": "npm --workspace @acrylic/local-agent run dev",
+    "dev:api": "npm --workspace @acrylic/control-api run dev",
+    "dev:web": "npm --workspace @acrylic/web run dev",
+    "typecheck:platform": "npm run typecheck --workspaces --if-present",
+    "dev:desktop": "npm run debug:app",
+    "dev": "npm run dev:preflight && concurrently --kill-others-on-fail --names agent,api,web --prefix-colors green,cyan,magenta \"npm run dev:agent\" \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:preflight": "node scripts/free-dev-ports.mjs 4320 5173",
+    "test:e2e:real": "node scripts/e2e-real.mjs",
+    "debug:app": "node scripts/debug-app.mjs"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "concurrently": "^10.0.4",
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

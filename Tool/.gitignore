@@ -1,0 +1,15 @@
+﻿# Tool local artifacts
+node_modules/
+dist/
+dist-bundle/
+.runtime/
+.venv/
+.test-*/
+place-assets/
+wait-assets/
+scripts/__pycache__/
+*.pyc
+*.log
+wait_*.ai
+.codex/
+.idea/

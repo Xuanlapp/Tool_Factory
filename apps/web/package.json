@@ -1,0 +1,26 @@
+{
+  "name": "@acrylic/web",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@acrylic/contracts": "*",
+    "@acrylic/ui": "*",
+    "@tailwindcss/vite": "latest",
+    "@tanstack/react-query": "latest",
+    "@vitejs/plugin-react": "latest",
+    "lucide-react": "^1.27.0",
+    "react": "latest",
+    "react-dom": "latest",
+    "react-router-dom": "^7.11.0",
+    "tailwindcss": "latest"
+  },
+  "devDependencies": {
+    "typescript": "latest",
+    "vite": "latest"
+  }
+}

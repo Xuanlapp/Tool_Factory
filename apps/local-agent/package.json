@@ -1,0 +1,19 @@
+{
+  "name": "@acrylic/local-agent",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@acrylic/contracts": "*",
+    "@acrylic/database": "*",
+    "@acrylic/telemetry": "*",
+    "@acrylic/nocodb": "*"
+  },
+  "devDependencies": {
+    "tsx": "latest",
+    "typescript": "latest"
+  }
+}

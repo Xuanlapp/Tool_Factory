@@ -1,0 +1,117 @@
+{
+    "name": "@acrylic/desktop",
+    "private": true,
+    "type": "module",
+    "scripts": {
+        "dev": "electron src/main.cjs",
+        "typecheck": "tsc -p tsconfig.json",
+        "start": "electron src/main.cjs",
+        "pack": "electron-builder --win --dir",
+        "dist": "electron-builder --win nsis"
+    },
+    "devDependencies": {
+        "electron": "latest",
+        "electron-builder": "^26.15.3",
+        "tsx": "latest",
+        "typescript": "latest"
+    },
+    "productName": "Acrylic Factory",
+    "version": "0.2.0",
+    "main": "src/main.cjs",
+    "build": {
+        "appId": "com.ffactory.acrylic",
+        "productName": "Acrylic Factory",
+        "directories": {
+            "output": "../../release"
+        },
+        "files": [
+            "src/**/*",
+            "package.json"
+        ],
+        "extraResources": [
+            {
+                "filter": [
+                    "web/**",
+                    "!**/dist/**",
+                    "!**/.vite/**",
+                    "!**/node_modules/.vite/**"
+                ],
+                "from": "../../apps",
+                "to": "bundle/apps"
+            },
+            {
+                "to": "bundle/packages",
+                "from": "../../packages"
+            },
+            {
+                "filter": [
+                    "scripts/**",
+                    "dist-bundle/**",
+                    "package.json",
+                    "README.md",
+                    "!.runtime/**",
+                    "!wait_*.ai",
+                    "!node_modules/**"
+                ],
+                "from": "../../Tool",
+                "to": "bundle/Tool"
+            },
+            {
+                "filter": [
+                    "*.mjs",
+                    "*.ps1"
+                ],
+                "from": "../../scripts",
+                "to": "bundle/scripts"
+            },
+            {
+                "to": "bundle/app-assets",
+                "from": "../../app-assets"
+            },
+            {
+                "to": "bundle/package.json",
+                "from": "../../package.json"
+            },
+            {
+                "to": "bundle/package-lock.json",
+                "from": "../../package-lock.json"
+            },
+            {
+                "filter": [
+                    "**/*",
+                    "!**/.cache/**",
+                    "!**/.vite/**"
+                ],
+                "from": "../../node_modules",
+                "to": "bundle/node_modules"
+            },
+            {
+                "from": "../../tsconfig.base.json",
+                "to": "bundle/tsconfig.base.json"
+            }
+        ],
+        "nsis": {
+            "oneClick": false,
+            "perMachine": false,
+            "allowToChangeInstallationDirectory": true,
+            "createDesktopShortcut": true,
+            "createStartMenuShortcut": true
+        },
+        "win": {
+            "target": [
+                "nsis"
+            ]
+        },
+        "publish": [
+            {
+                "provider": "github",
+                "owner": "Xuanlapp",
+                "repo": "Tool_Factory",
+                "releaseType": "release"
+            }
+        ]
+    },
+    "dependencies": {
+        "electron-updater": "^6.8.9"
+    }
+}

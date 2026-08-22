@@ -1,0 +1,8 @@
+{
+  "name": "@acrylic/telemetry",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "dependencies": { "@acrylic/contracts": "*" },
+  "scripts": { "typecheck": "tsc -p tsconfig.json" }
+}

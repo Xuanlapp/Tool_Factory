@@ -1,0 +1,32 @@
+﻿{
+  "name": "illustrator-import-image-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Prototype tool to open Adobe Illustrator and import a selected image.",
+  "type": "module",
+  "scripts": {
+    "build": "node ../scripts/build-tool-bundle.mjs",
+    "start": "chcp 65001>nul&& set ACRYLIC_CHECKPOINT_ITEM_LIMIT=90&& set ACRYLIC_CHECKPOINT_MODE=continue&& set ACRYLIC_CHECKPOINT_PAUSE_MS=0&& set ACRYLIC_JSX_BATCH_SIZE=18&& set ACRYLIC_ITEM_STALL_TIMEOUT_MS=180000&& set ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE=0&& set ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE=1&& npm run build && node dist-bundle/index.cjs",
+    "error": "chcp 65001>nul&& set ACRYLIC_IGNORE_CHECK_FALSE=1&& set ACRYLIC_ERROR_COMPARE_ONLY=1&& set ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT=1&& set ACRYLIC_CHECKPOINT_ITEM_LIMIT=90&& set ACRYLIC_CHECKPOINT_MODE=continue&& set ACRYLIC_CHECKPOINT_PAUSE_MS=0&& set ACRYLIC_JSX_BATCH_SIZE=1&& set ACRYLIC_ITEM_STALL_TIMEOUT_MS=180000&& set ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE=0&& set ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE=1&& npm run build && node dist-bundle/index.cjs",
+    "check": "chcp 65001>nul&& set ACRYLIC_CHECK_FULL_PIPELINE=1&& set ACRYLIC_JSX_BATCH_SIZE=1&& set ACRYLIC_ITEM_STALL_TIMEOUT_MS=180000&& set ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE=0&& set ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE=1&& npm run build && node dist-bundle/index.cjs",
+    "demo:pack": "npm run build && node dist-bundle/packing-demo.cjs",
+    "debug:lazer": "set ACRYLIC_DEBUG_LAZER_STEPS=1&& npm run build && node dist-bundle/index.cjs",
+    "test:export": "npm run build && node dist-bundle/test-export-output-assets.cjs",
+    "debug": "set ACRYLIC_DEBUG_PIPELINE=1&& npm run build && node dist-bundle/index.cjs",
+    "check:types": "tsc --noEmit",
+    "check:width": "npm run build && node dist-bundle/check-image-width.cjs"
+  },
+  "devDependencies": {
+    "@types/node": "latest",
+    "@types/pngjs": "^6.0.5",
+    "@types/potrace": "^2.1.5",
+    "potrace": "^2.1.8",
+    "tsx": "latest",
+    "typescript": "latest"
+  },
+  "dependencies": {
+    "@deepnest/calculate-nfp": "^202503.13.155300",
+    "pngjs": "^7.0.0"
+  }
+}
+
