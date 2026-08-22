@@ -31,6 +31,14 @@ jobs:
         run: npm run build
         working-directory: Tool
       - name: Build and publish Windows installer
-        run: npm --workspace @acrylic/desktop run dist -- --publish always
+        run: npm --workspace @acrylic/desktop run dist -- --publish never
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          generate_release_notes: true
