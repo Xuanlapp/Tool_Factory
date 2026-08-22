@@ -1190,6 +1190,9 @@ async function main() {
                 while (nextUnitIndex < runUnits.length && batchUnits.length < batchLimit) {
                     const candidate = runUnits[nextUnitIndex];
                     nextUnitIndex += 1;
+                    if (errorMovedPaths.has(candidate.job.imagePath)) {
+                        continue;
+                    }
                     const candidateSizeKey = String(Number(candidate.job.itemSizeInch));
                     if (blockedSizeKeys.has(candidateSizeKey)) {
                         console.log('Skip remaining size ' + candidateSizeKey + 'in after 2 no-fit; continue smaller sizes.');
