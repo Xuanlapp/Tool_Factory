@@ -16,7 +16,7 @@
         "typescript": "latest"
     },
     "productName": "Acrylic Factory",
-    "version": "0.2.5",
+    "version": "0.2.6",
     "main": "src/main.cjs",
     "build": {
         "appId": "com.ffactory.acrylic",
@@ -109,7 +109,8 @@
                 "repo": "Tool_Factory",
                 "releaseType": "release"
             }
-        ]
+        ],
+        "artifactName": "Acrylic-Factory-Setup-${version}.${ext}"
     },
     "dependencies": {
         "electron-updater": "^6.8.9"
