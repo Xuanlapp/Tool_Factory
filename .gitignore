@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 **/dist/
 **/.vite/
 release/
@@ -47,3 +47,8 @@ Desktop.ini
 .idea/
 .vscode/
 .codex/
+
+# Local test/release leftovers
+1/
+release-*/
+Tool/scripts/*.runtime.jsx

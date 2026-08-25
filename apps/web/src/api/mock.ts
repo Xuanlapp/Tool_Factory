@@ -1,4 +1,4 @@
-﻿import type { DashboardData } from './types';
+import type { DashboardData } from './types';
 
 const imageNames = [
   'christmas_2side_4in_qty1.png',
@@ -36,6 +36,7 @@ export const mockData: DashboardData = {
     ],
   },
   done: [],
+  processed: [],
   errors: [],
   outputs: [],
   history: [],

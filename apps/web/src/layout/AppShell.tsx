@@ -1,4 +1,4 @@
-﻿import { useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { AlertTriangle, CheckCircle2, ChevronDown, FileText, FolderOpen, History, LayoutDashboard, Layers3, ListTodo, Package, PanelLeftOpen, Settings, Shirt, Sparkles, Sticker } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
 import { cn } from '../components/utils';
@@ -17,6 +17,7 @@ const productGroups: ProductGroup[] = [
       { path: '/queue', label: 'Hàng chờ', icon: ListTodo },
       { path: '/tool', label: 'Tool', icon: Layers3 },
       { path: '/done', label: 'Đã xong', icon: CheckCircle2 },
+      { path: '/processed', label: 'Processed', icon: CheckCircle2 },
       { path: '/errors', label: 'Ảnh lỗi', icon: AlertTriangle },
       { path: '/outputs', label: 'Thành phẩm', icon: Package },
       { path: '/history', label: 'Lịch sử', icon: History },
@@ -49,6 +50,3 @@ function Sidebar() {
 export function AppShell({ currentFile, runnerStatus, illustratorConnected, children }: { currentFile: string; runnerStatus: string; illustratorConnected: boolean; children: ReactNode }) {
   return <div className="min-h-screen bg-[#f8faff] text-slate-800"><Sidebar /><div className="min-h-screen pl-[72px]"><div className="mx-auto flex min-h-screen max-w-[1680px] flex-col gap-6 px-4 py-4 lg:px-6"><header className="sticky top-4 z-30 rounded-[28px] border border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.04)]"><div className="flex flex-wrap items-start justify-between gap-4 px-6 py-5 lg:px-8"><div><div className="text-[34px] font-semibold tracking-[-0.04em] text-slate-900">Acrylic Production</div><div className="text-[17px] text-slate-500">Factory Control Dashboard</div></div><div className="flex flex-wrap items-center gap-3"><State label="Tool" value={runnerStatus === 'running' ? 'Đang chạy' : 'Đang chờ'} good={runnerStatus !== 'error'} /><State label="Illustrator" value={illustratorConnected ? 'Đã kết nối' : 'Mất kết nối'} good={illustratorConnected} /><button className="inline-flex h-14 max-w-[340px] items-center gap-3 rounded-2xl border border-slate-200 px-5 text-left text-[16px] text-slate-800"><FileText className="h-5 w-5 shrink-0 text-blue-700"/><span className="truncate">{currentFile}</span></button><button className="inline-flex h-14 items-center gap-3 rounded-2xl border border-blue-300 px-5 text-[16px] font-medium text-blue-700"><FolderOpen className="h-5 w-5"/>Mở thư mục</button></div></div></header><main className="px-1 py-2">{children}</main></div></div></div>;
 }
-
-
-

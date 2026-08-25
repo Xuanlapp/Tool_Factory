@@ -278,6 +278,7 @@ function disconnectedDashboard(errorMessage: string): DashboardData {
     queue: [],
     sheet: { ...mockData.sheet, id: '—', status: 'idle', placed: 0, total: 0, items: [], waitFiles: [], currentWaitFile: '—', waitDecision: 'Chưa kết nối agent' },
     done: [],
+    processed: [],
     errors: [],
     outputs: [],
     history: [],
@@ -303,6 +304,7 @@ export async function getDashboardData(): Promise<DashboardData> {
       queue,
       sheet: mapSheet(summary, waitFiles, [...(status?.folders.Images ?? []).map((file) => ({ ...file, previewScope: 'Images' })), ...(status?.folders.imgaes_done ?? []).map((file) => ({ ...file, previewScope: 'imgaes_done' })), ...(status?.folders.images_error ?? []).map((file) => ({ ...file, previewScope: 'images_error' }))]),
       done: mapDone(status?.folders.imgaes_done ?? []),
+      processed: mapDone(status?.folders.images_processed ?? []),
       errors: mapErrors(errorFiles),
       outputs: mapOutputs(outputs),
       history: mapHistory(events, summary),
@@ -340,10 +342,3 @@ export function subscribeDashboard(onData: (summary: Partial<DashboardSummary>) 
   });
   return () => events.close();
 }
-
-
-
-
-
-
-

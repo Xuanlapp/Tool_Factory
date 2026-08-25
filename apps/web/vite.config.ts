@@ -7,10 +7,36 @@ import path from 'node:path';
 import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
+import { PNG } from 'pngjs';
 
 type FileEntry = { path: string; relativePath: string; name: string; sizeBytes: number; modifiedAt: string; errorMeta?: Record<string, unknown>; waitManifest?: Record<string, unknown> };
+
+function fixVietnameseMojibake(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(fixVietnameseMojibake);
+  if (value && typeof value === 'object') {
+    const result: Record<string, unknown> = {};
+    for (const [key, item] of Object.entries(value as Record<string, unknown>)) result[key] = fixVietnameseMojibake(item);
+    return result;
+  }
+  if (typeof value !== 'string' || !/[ÂÃÆá]/.test(value)) return value;
+  const cp1252 = new Map<number, number>([[0x20ac,0x80],[0x201a,0x82],[0x0192,0x83],[0x201e,0x84],[0x2026,0x85],[0x2020,0x86],[0x2021,0x87],[0x02c6,0x88],[0x2030,0x89],[0x0160,0x8a],[0x2039,0x8b],[0x0152,0x8c],[0x017d,0x8e],[0x2018,0x91],[0x2019,0x92],[0x201c,0x93],[0x201d,0x94],[0x2022,0x95],[0x2013,0x96],[0x2014,0x97],[0x02dc,0x98],[0x2122,0x99],[0x0161,0x9a],[0x203a,0x9b],[0x0153,0x9c],[0x017e,0x9e],[0x0178,0x9f]]);
+  try {
+    const bytes: number[] = [];
+    for (const character of value) {
+      const code = character.codePointAt(0) ?? 0;
+      if (code <= 0xff) bytes.push(code);
+      else if (cp1252.has(code)) bytes.push(cp1252.get(code) ?? 0);
+      else return value;
+    }
+    const repaired = Buffer.from(bytes).toString('utf8');
+    return repaired.includes('�') ? value : repaired;
+  } catch {
+    return value;
+  }
+}
+
 type RunnerStatus = 'idle' | 'running' | 'error';
-type ToolCommand = 'start' | 'error' | 'check';
+type ToolCommand = 'start' | 'check' | 'test';
 type ExportAssetKind = 'front' | 'back' | 'lazer';
 type RunKind = 'tool' | 'export' | 'setup';
 type ToolStep = { index: number; total: number; step: string; fileName: string; status: 'running' | 'success' | 'error'; message: string };
@@ -37,7 +63,9 @@ const toolDir = path.join(appRoot, 'Tool');
 const toolStatePath = path.join(factoryRoot, '.runtime', 'tool-ui-state.json');
 const operationRuntimeDir = path.join(factoryRoot, '.runtime', 'operations');
 const operationRunnerPath = path.join(appRoot, 'scripts', 'tool-operation-runner.mjs');
+const thumbnailCacheDir = path.join(factoryRoot, '.runtime', 'thumb-cache');
 const folderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings.json');
+const checkSettingsPath = path.join(factoryRoot, '.runtime', 'check-settings.json');
 const defaultFolderPaths: Record<string, string> = {
   Images: path.join(factoryRoot, 'Images'),
   images_error: path.join(factoryRoot, 'images_error'),
@@ -52,6 +80,10 @@ const defaultFolderPaths: Record<string, string> = {
 };
 function loadFolderPaths(): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsPath, 'utf8')) as Record<string, string>; return { ...defaultFolderPaths, ...saved }; } catch { return { ...defaultFolderPaths }; } }
 function saveFolderPaths(next: Record<string, string>) { mkdirSync(path.dirname(folderSettingsPath), { recursive: true }); writeFileSync(folderSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
+type CheckSettings = { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number };
+const defaultCheckSettings: CheckSettings = { checkImageSize: true, checkTwoSideFaceOffset: false, faceToleranceCm: 0.01, cutToleranceCm: 0.05 };
+function loadCheckSettings(): CheckSettings { try { const saved = JSON.parse(readFileSync(checkSettingsPath, 'utf8')) as Partial<CheckSettings>; return { ...defaultCheckSettings, ...saved }; } catch { return { ...defaultCheckSettings }; } }
+function saveCheckSettings(next: CheckSettings) { mkdirSync(path.dirname(checkSettingsPath), { recursive: true }); writeFileSync(checkSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 function isUncPath(value: string) { return /^\\\\[^\\]+\\[^\\]+/.test(value.trim()); }
 function mappedDriveOf(value: string) { return value.trim().match(/^([A-Za-z]:)(?:[\\/]|$)/)?.[1].toUpperCase(); }
 function normalizePathSlashes(value: string) { return value.trim().replace(/[\\/]+/g, path.sep); }
@@ -116,6 +148,7 @@ const initialFolderNormalization = normalizeSavedFolderPaths(loadFolderPaths());
 let folderPaths = initialFolderNormalization.normalizedPaths;
 let folderPathWarnings: Record<string, string> = initialFolderNormalization.warnings;
 if (initialFolderNormalization.changed) saveFolderPaths(folderPaths);
+let checkSettings = loadCheckSettings();
 
 let activeChild: ChildProcess | null = null;
 let activeRun: ToolRun | null = null;
@@ -175,6 +208,20 @@ function moveErrorToProcessed(relativePath: string) {
   cachedSnapshot = null;
   cacheExpiresAt = 0;
   return path.relative(targetRoot, finalTarget);
+}
+
+function approvedErrorsPath() { return path.join(folderPaths.Images, '.approved-errors.json'); }
+function readApprovedErrors(): Record<string, Record<string, unknown>> { try { return JSON.parse(readFileSync(approvedErrorsPath(), 'utf8')) as Record<string, Record<string, unknown>>; } catch { return {}; } }
+function moveErrorToImagesWithApproval(relativePath: string) {
+  const sourceRoot = folderPaths.images_error; const targetRoot = folderPaths.Images;
+  const source = resolveFileInside(sourceRoot, relativePath);
+  if (!existsSync(source) || !fs.statSync(source).isFile()) throw new Error('Kh?ng t?m th?y ?nh l?i c?n ch?p nh?n.');
+  const target = resolveFileInside(targetRoot, path.basename(relativePath)); mkdirSync(path.dirname(target), { recursive: true });
+  let finalTarget = target;
+  if (existsSync(finalTarget)) { const extension = path.extname(target); const baseName = target.slice(0, -extension.length); let duplicateIndex = 2; while (existsSync(baseName + '_dup' + duplicateIndex + extension)) duplicateIndex += 1; finalTarget = baseName + '_dup' + duplicateIndex + extension; }
+  try { renameSync(source, finalTarget); } catch { fs.copyFileSync(source, finalTarget); fs.rmSync(source, { force: true }); }
+  const approved = readApprovedErrors(); approved[path.basename(finalTarget)] = { approvedAt: new Date().toISOString(), sourceRelativePath: relativePath };
+  writeFileSync(approvedErrorsPath(), JSON.stringify(approved, null, 2), 'utf8'); cachedSnapshot = null; cacheExpiresAt = 0; return path.relative(targetRoot, finalTarget);
 }
 
 function persistToolState() {
@@ -353,7 +400,7 @@ function launchPersistentOperation(run: ToolRun, executable: string, args: strin
   const resultPath = path.join(operationRuntimeDir, `${run.id}.result.json`);
   const specPath = path.join(operationRuntimeDir, `${run.id}.spec.json`);
   writeFileSync(logPath, '', 'utf8');
-  const operationEnv = { ...process.env, ...env, ACRYLIC_FACTORY_ROOT: factoryRoot, ACRYLIC_IMAGES_DIR: folderPaths.Images, ACRYLIC_IMAGES_ERROR_DIR: folderPaths.images_error, ACRYLIC_IMAGES_DONE_DIR: folderPaths.imgaes_done, ACRYLIC_WAIT_DIR: folderPaths.wait, ACRYLIC_OUTPUT_AI_DIR: folderPaths.output_ai, ACRYLIC_OUTPUT_FRONT_DIR: folderPaths.output_front, ACRYLIC_OUTPUT_BACK_DIR: folderPaths.output_back, ACRYLIC_OUTPUT_LAZER_DIR: folderPaths.output_lazer, ACRYLIC_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_UVDTF.ai'), ACRYLIC_LAZER_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_Lazer.ai') };
+  const operationEnv = { ...process.env, ...env, ACRYLIC_FACTORY_ROOT: factoryRoot, ACRYLIC_IMAGES_DIR: folderPaths.Images, ACRYLIC_IMAGES_ERROR_DIR: folderPaths.images_error, ACRYLIC_IMAGES_DONE_DIR: folderPaths.imgaes_done, ACRYLIC_WAIT_DIR: folderPaths.wait, ACRYLIC_OUTPUT_AI_DIR: folderPaths.output_ai, ACRYLIC_OUTPUT_FRONT_DIR: folderPaths.output_front, ACRYLIC_OUTPUT_BACK_DIR: folderPaths.output_back, ACRYLIC_OUTPUT_LAZER_DIR: folderPaths.output_lazer, ACRYLIC_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_UVDTF.ai'), ACRYLIC_LAZER_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_Lazer.ai'), ACRYLIC_CHECK_IMAGE_SIZE: String(checkSettings.checkImageSize), ACRYLIC_CHECK_TWO_SIDE_FACE_OFFSET: String(checkSettings.checkTwoSideFaceOffset), ACRYLIC_CHECK_FACE_TOLERANCE_CM: String(checkSettings.faceToleranceCm), ACRYLIC_CHECK_CUT_TOLERANCE_CM: String(checkSettings.cutToleranceCm) };
   if (executable === 'cscript.exe' && /clear-wait-printed-layers\.runtime\.jsx$/i.test(String(args[2] ?? ''))) {
     const source = readFileSync(path.join(toolDir, 'scripts', 'clear-wait-printed-layers.jsx'), 'utf8');
     writeFileSync(path.join(toolDir, 'scripts', 'clear-wait-printed-layers.runtime.jsx'), ['var CODEX_WAIT_PRINTED_SOURCE_PATH = ' + JSON.stringify(String((operationEnv as Record<string, string>).ACRYLIC_WAIT_PRINTED_SOURCE_PATH ?? '').replace(/\\/g, '/')) + ';', 'var CODEX_WAIT_PRINTED_RESULT_PATH = ' + JSON.stringify(String((operationEnv as Record<string, string>).ACRYLIC_WAIT_PRINTED_RESULT_PATH ?? '').replace(/\\/g, '/')) + ';', 'var CODEX_WAIT_PRINTED_MANIFEST_PATH = ' + JSON.stringify(String((operationEnv as Record<string, string>).ACRYLIC_WAIT_PRINTED_MANIFEST_PATH ?? '').replace(/\\/g, '/')) + ';', source].join('\n'), 'utf8');
@@ -466,13 +513,13 @@ function runExport(outputAiRelativePath: string, assets: ExportAssetKind[]) {
 
 function runTool(command: ToolCommand) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
-  const commandEnv: Record<string, string> = command === 'error'
-    ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: '18', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
-    : command === 'check'
-      ? { ACRYLIC_CHECK_FULL_PIPELINE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
-      : { ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: '18', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
-  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
-  launchPersistentOperation(run, 'node', [path.join(toolDir, 'dist-bundle', 'index.cjs')], commandEnv);
+  const commandEnv: Record<string, string> = command === 'check'
+    ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '1', ACRYLIC_CHECKPOINT_MODE: 'stop', ACRYLIC_JSX_BATCH_SIZE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '0' }
+    : command === 'test'
+      ? { ACRYLIC_TEST_IMPORT_ONE_IMAGE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
+      : { ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: '18', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '180000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
+  const executablePath = command === 'test' ? path.join(toolDir, 'dist-bundle', 'test-import-one-image.cjs') : path.join(toolDir, 'dist-bundle', 'index.cjs');  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
+  launchPersistentOperation(run, 'node', [executablePath], commandEnv);
   return { ok: true, message: 'Đã chạy Tool ' + command + '.', run: activeRun };
 }
 
@@ -481,7 +528,7 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
   const files: FileEntry[] = [];
   let errorMetadata: Record<string, Record<string, unknown>> = {};
   if (path.resolve(root).toLowerCase() === path.resolve(folderPaths.images_error).toLowerCase()) {
-    try { errorMetadata = JSON.parse(readFileSync(path.join(root, '.error-metadata.json'), 'utf8')) as Record<string, Record<string, unknown>>; } catch {}
+    try { errorMetadata = fixVietnameseMojibake(JSON.parse(readFileSync(path.join(root, '.error-metadata.json'), 'utf8'))) as Record<string, Record<string, unknown>>; } catch {}
   }
   async function walk(current: string) {
     let entries;
@@ -498,7 +545,13 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
       if (rootKey === 'output_front' && (extension !== '.png' || !/_front\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_back' && (extension !== '.png' || !/_back\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_lazer' && (extension !== '.ai' || !/_lazer\.ai$/i.test(entry.name))) continue;
-      const info = await stat(fullPath);
+      let info;
+      try {
+        info = await stat(fullPath);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue;
+        throw error;
+      }
       let waitManifest: Record<string, unknown> | undefined;
       if (path.resolve(root).toLowerCase() === path.resolve(folderPaths.wait).toLowerCase() && entry.name.toLowerCase().endsWith('.ai')) {
         const manifestPath = fullPath.replace(/\.ai$/i, '.manifest.json');
@@ -553,6 +606,64 @@ function json(response: import('node:http').ServerResponse, value: unknown, stat
   response.end(JSON.stringify(value));
 }
 
+function writeTinyPngFallback(response: import('node:http').ServerResponse) {
+  const png = new PNG({ width: 1, height: 1 });
+  png.data[0] = 248; png.data[1] = 250; png.data[2] = 252; png.data[3] = 255;
+  response.setHeader('Content-Type', 'image/png');
+  response.end(PNG.sync.write(png));
+}
+
+function createThumbnailBuffer(sourcePath: string, maxSize = 220) {
+  const source = PNG.sync.read(readFileSync(sourcePath));
+  const scale = Math.min(1, maxSize / Math.max(source.width, source.height));
+  const width = Math.max(1, Math.round(source.width * scale));
+  const height = Math.max(1, Math.round(source.height * scale));
+  const thumb = new PNG({ width, height });
+  for (let y = 0; y < height; y += 1) {
+    const sy = Math.min(source.height - 1, Math.floor(y / scale));
+    for (let x = 0; x < width; x += 1) {
+      const sx = Math.min(source.width - 1, Math.floor(x / scale));
+      const sourceOffset = (sy * source.width + sx) * 4;
+      const targetOffset = (y * width + x) * 4;
+      thumb.data[targetOffset] = source.data[sourceOffset];
+      thumb.data[targetOffset + 1] = source.data[sourceOffset + 1];
+      thumb.data[targetOffset + 2] = source.data[sourceOffset + 2];
+      thumb.data[targetOffset + 3] = source.data[sourceOffset + 3];
+    }
+  }
+  return PNG.sync.write(thumb);
+}
+
+function serveThumbnail(url: URL, response: import('node:http').ServerResponse) {
+  const match = url.pathname.match(/^\/api\/v1\/thumbnails\/([^/]+)$/);
+  if (!match) return false;
+  const scope = decodeURIComponent(match[1]);
+  const root = folderPaths[scope];
+  if (!root) { response.statusCode = 404; response.end('UNKNOWN_SCOPE'); return true; }
+  const relativePath = url.searchParams.get('path') ?? '';
+  const resolvedRoot = path.resolve(root);
+  const resolvedFile = path.resolve(root, relativePath);
+  if (!relativePath || (!resolvedFile.toLowerCase().startsWith(resolvedRoot.toLowerCase() + path.sep) && resolvedFile.toLowerCase() !== resolvedRoot.toLowerCase())) { response.statusCode = 400; response.end('INVALID_PATH'); return true; }
+  if (path.extname(resolvedFile).toLowerCase() !== '.png') return serveFile(url, response);
+  let info;
+  try { info = statSync(resolvedFile); } catch { response.statusCode = 404; response.end('FILE_NOT_FOUND'); return true; }
+  const cacheKey = Buffer.from(scope + '|' + resolvedFile.toLowerCase() + '|' + info.size + '|' + Math.floor(info.mtimeMs)).toString('base64url');
+  const cachePath = path.join(thumbnailCacheDir, cacheKey + '.png');
+  const etag = 'W/"thumb-' + cacheKey + '"';
+  response.setHeader('ETag', etag);
+  response.setHeader('Cache-Control', 'private, no-cache');
+  if (String(response.req.headers['if-none-match'] ?? '') === etag) { response.statusCode = 304; response.end(); return true; }
+  try {
+    mkdirSync(thumbnailCacheDir, { recursive: true });
+    if (!existsSync(cachePath)) writeFileSync(cachePath, createThumbnailBuffer(resolvedFile));
+    response.setHeader('Content-Type', 'image/png');
+    createReadStream(cachePath).on('error', () => writeTinyPngFallback(response)).pipe(response);
+  } catch {
+    return serveFile(url, response);
+  }
+  return true;
+}
+
 function serveFile(url: URL, response: import('node:http').ServerResponse) {
   const match = url.pathname.match(/^\/api\/v1\/files\/([^/]+)$/);
   if (!match) return false;
@@ -568,7 +679,14 @@ function serveFile(url: URL, response: import('node:http').ServerResponse) {
   else if (ext === '.jpg' || ext === '.jpeg') response.setHeader('Content-Type', 'image/jpeg');
   else if (ext === '.webp') response.setHeader('Content-Type', 'image/webp');
   else { response.statusCode = 415; response.end('PREVIEW_NOT_SUPPORTED'); return true; }
-  response.setHeader('Cache-Control', 'no-store, max-age=0');
+  try {
+    const info = statSync(resolvedFile);
+    const etag = `W/\"${info.size}-${Math.floor(info.mtimeMs)}\"`;
+    response.setHeader('ETag', etag);
+    response.setHeader('Last-Modified', info.mtime.toUTCString());
+    response.setHeader('Cache-Control', 'private, no-cache');
+    if (String(response.req.headers['if-none-match'] ?? '') === etag) { response.statusCode = 304; response.end(); return true; }
+  } catch { response.statusCode = 404; response.end('FILE_NOT_FOUND'); return true; }
   createReadStream(resolvedFile).on('error', () => { if (!response.headersSent) response.statusCode = 404; response.end('FILE_NOT_FOUND'); }).pipe(response);
   return true;
 }
@@ -682,6 +800,7 @@ function localFilesystemApi(): Plugin {
       server.middlewares.use(async (request, response, next) => {
         const url = new URL(request.url ?? '/', 'http://localhost');
         if (!url.pathname.startsWith('/api/v1/')) return next();
+        if (serveThumbnail(url, response)) return;
         if (serveFile(url, response)) return;
         if (url.pathname === '/api/v1/wait-preview') {
           const relativePath = url.searchParams.get('path') ?? '';
@@ -784,7 +903,7 @@ function localFilesystemApi(): Plugin {
               return;
             }
             const command = payload.command;
-            if (!['start', 'error', 'check'].includes(String(command))) {
+            if (!['start', 'check', 'test'].includes(String(command))) {
               json(response, { ok: false, message: 'Lệnh Tool không hợp lệ.', run: toolStatus().run }, 400);
               return;
             }
@@ -807,7 +926,7 @@ function localFilesystemApi(): Plugin {
             response.write(`event: tool\ndata: ${JSON.stringify(toolStatus())}\n\n`);
           };
           await send();
-          const timer = setInterval(() => void send(), 250);
+          const timer = setInterval(() => void send(), 1000);
           request.on('close', () => clearInterval(timer));
           return;
         }
@@ -815,6 +934,7 @@ function localFilesystemApi(): Plugin {
         if (url.pathname === '/api/v1/status') return json(response, current);
         if (url.pathname === '/api/v1/queue') return json(response, current.folders.Images);
         if (url.pathname === '/api/v1/errors') return json(response, current.folders.images_error);
+        if (url.pathname === '/api/v1/processed') return json(response, current.folders.images_processed);
         if (url.pathname === '/api/v1/errors/processed') {
           if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
           let body = '';
@@ -832,9 +952,31 @@ function localFilesystemApi(): Plugin {
           });
           return;
         }
+        if (url.pathname === '/api/v1/errors/approved') {
+          if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
+          let body = ''; request.on('data', (chunk) => { body += String(chunk); });
+          request.on('end', () => {
+            try { const parsed = JSON.parse(body || '{}') as { relativePath?: unknown }; const relativePath = String(parsed.relativePath ?? '').trim();
+              if (!relativePath) return json(response, { ok: false, message: 'Thiếu đường dẫn ảnh lỗi.' }, 400);
+              const approvedRelativePath = moveErrorToImagesWithApproval(relativePath);
+              return json(response, { ok: true, message: 'Đã chuyển ảnh sang Images và đánh dấu bỏ qua check.', relativePath: approvedRelativePath });
+            } catch (error) { return json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể chấp nhận ảnh.' }, 400); }
+          }); return;
+        }
         if (url.pathname === '/api/v1/wait') return json(response, current.folders.wait);
         if (url.pathname === '/api/v1/outputs') return json(response, { ai: current.folders.output_ai, front: current.folders.output_front, back: current.folders.output_back, lazer: current.folders.output_lazer });
-        if (url.pathname === '/api/v1/settings/folders') return json(response, { folderPaths, folderPathWarnings });
+        if (url.pathname === '/api/v1/settings/folders') return json(response, { folderPaths, folderPathWarnings, checkSettings });
+        if (url.pathname === '/api/v1/settings/checks/save') {
+          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => {
+            try {
+              const parsed = JSON.parse(body || '{}') as Partial<CheckSettings>;
+              checkSettings = { checkImageSize: parsed.checkImageSize !== false, checkTwoSideFaceOffset: parsed.checkTwoSideFaceOffset !== false, faceToleranceCm: Number(parsed.faceToleranceCm ?? checkSettings.faceToleranceCm ?? 0.01), cutToleranceCm: Number(parsed.cutToleranceCm ?? checkSettings.cutToleranceCm ?? 0.05) };
+              saveCheckSettings(checkSettings);
+              return json(response, { ok: true, checkSettings });
+            } catch { return json(response, { ok: false, message: 'Không thể lưu cấu hình check.' }, 400); }
+          });
+          return;
+        }
         if (url.pathname === '/api/v1/settings/folders/save') {
           let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => {
             try { const parsed = JSON.parse(body || '{}') as { folderPaths?: Record<string, string>; moveData?: boolean };
@@ -861,7 +1003,7 @@ function localFilesystemApi(): Plugin {
               }
               folderPaths = nextPaths; folderPathWarnings = {}; cachedSnapshot = null; saveFolderPaths(folderPaths); return json(response, { ok:true, folderPaths, normalizedPaths, warnings, moveData: parsed.moveData !== false });
             } catch (error) { return json(response, { ok:false, message: error instanceof Error ? error.message : 'SAVE_FAILED' }, 400); }
-          }); return; } 
+          }); return; }
         next();
       });
     },
@@ -869,29 +1011,3 @@ function localFilesystemApi(): Plugin {
 }
 
 export default defineConfig({ plugins: [localFilesystemApi(), react(), tailwindcss()] });
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

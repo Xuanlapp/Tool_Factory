@@ -18,9 +18,17 @@ var CODEX_CHECK_MEASUREMENTS = {};
 var CODEX_SUPPRESS_REDRAW = false;
 var REDRAW_AT_BATCH_END = true;
 var DEBUG_LAZER_STEPS_ENABLED = false;
+var PREVIEW_SORT_ONLY = false;
+try { PREVIEW_SORT_ONLY = typeof CODEX_PREVIEW_SORT_ONLY !== 'undefined' && CODEX_PREVIEW_SORT_ONLY === true; } catch (error) { PREVIEW_SORT_ONLY = false; }
 try { DEBUG_LAZER_STEPS_ENABLED = typeof CODEX_DEBUG_LAZER_STEPS !== 'undefined' && CODEX_DEBUG_LAZER_STEPS === true; } catch (error) { DEBUG_LAZER_STEPS_ENABLED = false; }
 var IGNORE_CHECK_FALSE = false;
 try { IGNORE_CHECK_FALSE = typeof CODEX_IGNORE_CHECK_FALSE !== 'undefined' && CODEX_IGNORE_CHECK_FALSE === true; } catch (error) { IGNORE_CHECK_FALSE = false; }
+var CHECK_IMAGE_SIZE_ENABLED = true;
+try { CHECK_IMAGE_SIZE_ENABLED = typeof CODEX_CHECK_IMAGE_SIZE_ENABLED === 'undefined' || CODEX_CHECK_IMAGE_SIZE_ENABLED === true; } catch (error) { CHECK_IMAGE_SIZE_ENABLED = true; }
+var CHECK_TWO_SIDE_FACE_OFFSET_ENABLED = true;
+try { CHECK_TWO_SIDE_FACE_OFFSET_ENABLED = typeof CODEX_CHECK_TWO_SIDE_FACE_OFFSET_ENABLED === 'undefined' || CODEX_CHECK_TWO_SIDE_FACE_OFFSET_ENABLED === true; } catch (error) { CHECK_TWO_SIDE_FACE_OFFSET_ENABLED = true; }
+var CHECK_FRONT_BACK_VS_LAZER_ENABLED = true;
+try { CHECK_FRONT_BACK_VS_LAZER_ENABLED = typeof CODEX_CHECK_FRONT_BACK_VS_LAZER_ENABLED === 'undefined' || CODEX_CHECK_FRONT_BACK_VS_LAZER_ENABLED === true; } catch (error) { CHECK_FRONT_BACK_VS_LAZER_ENABLED = true; }
 var QTY_COPY_GAP_CM = 0.2;
 var QTY_COPY_GAP_POINT = QTY_COPY_GAP_CM * CM_TO_POINT;
 var PACKING_MODE = 'FAST';
@@ -139,14 +147,17 @@ function checkCompareMeasurements(sideCount) {
     addReport('CHECK_LEFT_POINT_FRONT_BACK_UPPER: ' + (upperLeftSame ? 'true' : 'false') + ' | front.left=' + (upperLeftPair ? upperLeftPair.front.leftX : 'missing') + 'cm | back.left=' + (upperLeftPair ? upperLeftPair.back.leftX : 'missing') + 'cm | deltaLeft=' + (upperLeftDx === null ? 'missing' : upperLeftDx) + 'cm | tolerance=' + CHECK_LEFT_BAR_TOLERANCE_CM + 'cm');
     drawCheckLeftPointPair(app.activeDocument, front, back, sharedLeftPair);
     drawCheckLeftPointPair(app.activeDocument, front, back, upperLeftPair, 'UPPER');
-    var faceOffsetOk = firstLeftSame && upperLeftSame;
-    var twoOk = zeroOk && two.ok && faceOffsetOk;
+    var faceOffsetOk = (!CHECK_TWO_SIDE_FACE_OFFSET_ENABLED) || (firstLeftSame && upperLeftSame);
+    var twoOk = zeroOk;
+    if (CHECK_FRONT_BACK_VS_LAZER_ENABLED) twoOk = twoOk && two.front.leftRightExact && two.front.bottomOk && two.back.leftRightExact && two.back.bottomOk && two.frontBackLeftExact && two.frontBackRightExact && two.ok && two.frontBackBottomExact;
+    if (CHECK_TWO_SIDE_FACE_OFFSET_ENABLED) twoOk = twoOk && faceOffsetOk;
     addReport('CHECK_COMPARE_2SIDE: ' + (twoOk ? 'true' : 'false') + ' | zero_positive_all=' + zeroOk + ' | zeroErrors=' + (invalids.length ? invalids.join(',') : 'none') + ' | bo_qua_check_lazer_trai_phai=true | front_left_right_exact=' + two.front.leftRightExact + ' | leftRightTol=' + tolerance + 'cm | front_bottom_tol=' + two.front.bottomOk + ' | back_left_right_exact=' + two.back.leftRightExact + ' | back_bottom_tol=' + two.back.bottomOk + ' | front_back_left_exact=' + two.frontBackLeftExact + ' | front_back_right_exact=' + two.frontBackRightExact + ' | all_6_deltas_ok=' + two.ok + ' | front_back_bottom_tol=' + two.frontBackBottomExact + ' | face_offset_ok=' + faceOffsetOk + ' | left_point_visual_check=' + firstLeftSame + ' | upper_left_point_visual_check=' + upperLeftSame + ' | secondaryLeftDeltaX=' + firstLeftDx + 'cm | secondaryLeftDeltaY=' + firstLeftDy + 'cm | frontDeltaTrai=' + two.front.leftDelta + 'cm | frontDeltaPhai=' + two.front.rightDelta + 'cm | frontDeltaDuoi=' + two.front.bottomDelta + 'cm | backDeltaTrai=' + two.back.leftDelta + 'cm | backDeltaPhai=' + two.back.rightDelta + 'cm | backDeltaDuoi=' + two.back.bottomDelta + 'cm | bottomTol=' + tolerance + 'cm');
     return twoOk;
   }
+  if (!CHECK_FRONT_BACK_VS_LAZER_ENABLED) { addReport('CHECK_COMPARE_1SIDE: true | reason=front_lazer_check_disabled'); return true; }
   if (!front) { addReport('CHECK_COMPARE_1SIDE: false | reason=missing_front_measurement'); return false; }
   var single = compareLazerOffset(front, lazer, tolerance);
-  var singleOk = zeroOk && single.ok;
+  var singleOk = zeroOk && single.leftRightExact && single.ok && single.bottomOk;
   addReport('CHECK_COMPARE_1SIDE: ' + (singleOk ? 'true' : 'false') + ' | zero_positive_all=' + zeroOk + ' | zeroErrors=' + (invalids.length ? invalids.join(',') : 'none') + ' | bo_qua_check_lazer_trai_phai=true | target=front | delta_trai_phai_exact=' + single.leftRightExact + ' | leftRightTol=' + tolerance + 'cm | all_3_deltas_ok=' + single.ok + ' | delta_bottom_tol=' + single.bottomOk + ' | deltaTrai=' + single.leftDelta + 'cm | deltaPhai=' + single.rightDelta + 'cm | deltaDuoi=' + single.bottomDelta + 'cm | bottomTol=' + tolerance + 'cm');
   return singleOk;
 }
@@ -496,6 +507,55 @@ function embedImage(caseLayer, documentRef, imagePath, label, offsetIndex, force
   return raster;
 }
 
+var SHARED_SOURCE_IMPORT = null;
+var SHARED_SOURCE_LAYER = null;
+
+function resetSharedSourceImport() {
+  SHARED_SOURCE_IMPORT = null;
+  if (SHARED_SOURCE_LAYER !== null) {
+    try { unlockAndShow(SHARED_SOURCE_LAYER); SHARED_SOURCE_LAYER.remove(); } catch (error) {}
+  }
+  SHARED_SOURCE_LAYER = null;
+}
+
+function sharedSourceRaster(documentRef, parentLayer) {
+  if (SHARED_SOURCE_IMPORT !== null) return SHARED_SOURCE_IMPORT;
+  SHARED_SOURCE_LAYER = parentLayer.layers.add();
+  SHARED_SOURCE_LAYER.name = 'SOURCE_PNG_IMPORT_ONCE';
+  unlockAndShow(SHARED_SOURCE_LAYER);
+  SHARED_SOURCE_IMPORT = embedImage(SHARED_SOURCE_LAYER, documentRef, CODEX_IMAGE_PATH, 'source_once', 0, true);
+  if (SHARED_SOURCE_IMPORT === null) throw new Error('Không thể import PNG nguồn dùng chung.');
+  try { SHARED_SOURCE_IMPORT.name = 'IMAGE_SOURCE_ONCE'; } catch (error) {}
+  validateSharedSourceSize(SHARED_SOURCE_IMPORT);
+  addReport('IMPORT_SOURCE_ONCE: true | PNG chỉ được place/embed một lần; Lazer/Front/Back dùng duplicate nội bộ.');
+  return SHARED_SOURCE_IMPORT;
+}
+
+function validateSharedSourceSize(imageItem) {
+  if (!CHECK_IMAGE_SIZE_ENABLED) return true;
+  var b = geometricBoundsOf(imageItem);
+  var widthCm = b.width / CM_TO_POINT;
+  var heightCm = b.height / CM_TO_POINT;
+  var expectedHeightCm = Number(CODEX_SIDE_COUNT) >= 2 ? 91.44 : 60.96;
+  var widthOk = Math.abs(widthCm - 30.48) <= 0.01;
+  var heightOk = Math.abs(heightCm - expectedHeightCm) <= 0.01;
+  var ok = widthOk && heightOk;
+  addReport('CHECK_SOURCE_W_H: W=' + (Math.round(widthCm * 1000) / 1000) + 'cm | H=' + (Math.round(heightCm * 1000) / 1000) + 'cm | expected W=30.48cm | expected H=' + expectedHeightCm + 'cm | ' + ok);
+  if (!ok) {
+    var message = 'CHECK_IMAGE_SIZE_FALSE: W=' + (Math.round(widthCm * 1000) / 1000) + 'cm, H=' + (Math.round(heightCm * 1000) / 1000) + 'cm | yêu cầu W=30.48cm và H=' + expectedHeightCm + 'cm';
+    if (IGNORE_CHECK_FALSE) addReport('CHECK_SOURCE_W_H_FALSE: ' + message);
+    else throw new Error(message);
+  }
+  return ok;
+}
+function duplicateSharedSourceToCase(documentRef, parentLayer, caseLayer, label, offsetIndex) {
+  var source = sharedSourceRaster(documentRef, parentLayer);
+  var duplicate = source.duplicate(caseLayer, ElementPlacement.PLACEATBEGINNING);
+  duplicate.position = [50 + (offsetIndex * (MASK_SIZE_POINT + 40)), documentRef.height - 50];
+  try { duplicate.name = 'IMAGE_' + label; } catch (error) {}
+  unlockAndShow(duplicate);
+  return duplicate;
+}
 function validateImportedImageWidth(imageItem, label) {
   var imageBounds = geometricBoundsOf(imageItem);
   var widthCm = imageBounds.width / CM_TO_POINT;
@@ -871,6 +931,11 @@ function alignImageToMask(raster, mask, verticalMode, useColoredBounds) {
   else if (verticalMode === 'bottom') dy = mb.bottom - rb.bottom;
   else dy = ((mb.top + mb.bottom) / 2) - ((rb.top + rb.bottom) / 2);
   raster.translate(dx, dy);
+  try {
+    var after = boundsOf(raster);
+    var debugEnabled = (typeof CODEX_CHECK_FULL_PIPELINE !== 'undefined' && CODEX_CHECK_FULL_PIPELINE === true) || IGNORE_CHECK_FALSE;
+    if (debugEnabled) addReport('IMPORT_ALIGN_' + String(verticalMode).toUpperCase() + ': rasterBefore=' + Math.round(rb.left * 1000) / 1000 + ',' + Math.round(rb.top * 1000) / 1000 + ',' + Math.round(rb.right * 1000) / 1000 + ',' + Math.round(rb.bottom * 1000) / 1000 + ' | mask=' + Math.round(mb.left * 1000) / 1000 + ',' + Math.round(mb.top * 1000) / 1000 + ',' + Math.round(mb.right * 1000) / 1000 + ',' + Math.round(mb.bottom * 1000) / 1000 + ' | dx=' + Math.round(dx * 1000) / 1000 + 'pt | dy=' + Math.round(dy * 1000) / 1000 + 'pt | rasterAfter=' + Math.round(after.left * 1000) / 1000 + ',' + Math.round(after.top * 1000) / 1000 + ',' + Math.round(after.right * 1000) / 1000 + ',' + Math.round(after.bottom * 1000) / 1000);
+  } catch (error) {}
 }
 
 function makeClip(caseLayer, raster, mask, label) {
@@ -4223,11 +4288,15 @@ function replaceLazerClipMaskWithOutline(parentLayer) {
 }
 function runCase(documentRef, parentLayer, label, verticalMode, offsetIndex, preferredIndex, useUnion) {
   var caseLayer = createCaseLayer(parentLayer, label);
-  var sourceImagePath = label === 'lazer' && typeof CODEX_LAZER_IMAGE_PATH !== 'undefined' && CODEX_LAZER_IMAGE_PATH ? CODEX_LAZER_IMAGE_PATH : CODEX_IMAGE_PATH;
-  var imageItem = embedImage(caseLayer, documentRef, sourceImagePath, label, offsetIndex, label === 'lazer');
+  var imageItem = duplicateSharedSourceToCase(documentRef, parentLayer, caseLayer, label, offsetIndex);
   if (imageItem === null) throw new Error('Kh?ng t?m th?y IMAGE_' + label);
   validateImportedImageWidth(imageItem, label);
   var mask = createMask(caseLayer, documentRef, label, offsetIndex);
+  try {
+    var box = boundsOf(mask);
+    var boxCheckEnabled = (typeof CODEX_CHECK_FULL_PIPELINE !== 'undefined' && CODEX_CHECK_FULL_PIPELINE === true) || IGNORE_CHECK_FALSE;
+    if (boxCheckEnabled) addReport('CHECK_BOX_30_48CM_' + String(label).toUpperCase() + ': left=' + Math.round(box.left * 1000) / 1000 + 'pt | top=' + Math.round(box.top * 1000) / 1000 + 'pt | right=' + Math.round(box.right * 1000) / 1000 + 'pt | bottom=' + Math.round(box.bottom * 1000) / 1000 + 'pt | width=' + Math.round((box.width / CM_TO_POINT) * 1000) / 1000 + 'cm | height=' + Math.round((box.height / CM_TO_POINT) * 1000) / 1000 + 'cm');
+  } catch (error) {}
   if (label === 'lazer') debugLazerStep('Da tao o vuong 30.48cm', mask);
   alignImageToMask(imageItem, mask, verticalMode);
   var checkMode = false;
@@ -4402,6 +4471,7 @@ function runBatch() {
     CODEX_COLORED_METRICS = item.coloredMetrics;
     CODEX_REPORTS = [];
     resetCheckMeasurements();
+    resetSharedSourceImport();
     var currentSizeKey = String(Number(item.itemSizeInch));
     if (blockedSizeKeys[currentSizeKey]) {
       results.push({ success: false, fit: false, message: 'SKIPPED_SIZE_AFTER_TWO_NO_FIT', reason: 'size=' + currentSizeKey });
@@ -4420,8 +4490,10 @@ function runBatch() {
         if (CODEX_SIDE_COUNT >= 2) runCase(documentRef, parentLayer, 'back', 'bottom', 2, 2, true);
       }
       writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'PRINT_READY', item, '');
-      var shouldCheckCompare = true;
-      var compareOk = checkCompareMeasurements(CODEX_SIDE_COUNT);
+      resetSharedSourceImport();
+      if (PREVIEW_SORT_ONLY) addReport('CHECK_PREVIEW_SORT_ONLY: bo qua compare/check; tiep tuc scale va sap xep de xem.');
+      var shouldCheckCompare = !PREVIEW_SORT_ONLY;
+      var compareOk = PREVIEW_SORT_ONLY ? true : checkCompareMeasurements(CODEX_SIDE_COUNT);
       if (!compareOk && IGNORE_CHECK_FALSE) {
         addReport('IGNORE_CHECK_FALSE: compare vẫn false; chuyển ảnh vào images_error, không pack item này.');
       }
@@ -4521,15 +4593,3 @@ try {
   } catch (writeError) {}
   throw error;
 }
-
-
-
-
-
-
-
-
-
-
-
-

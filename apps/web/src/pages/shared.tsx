@@ -1,4 +1,4 @@
-﻿import { memo } from 'react';
+import { memo } from 'react';
 import type { DoneItem, ErrorItem, QueueItem, SheetItem } from '../api/types';
 import { FileThumbnail } from '../components/FileThumbnail';
 import { StatusBadge } from '../components/StatusBadge';
@@ -27,8 +27,8 @@ function DoneRowBase({ item, selected = false, onSelect }: { item: DoneItem; sel
 }
 export const DoneRow = memo(DoneRowBase);
 
-export function ErrorRow({ item, onProcessed }: { item: ErrorItem; onProcessed?: (item: ErrorItem) => void }) {
-  return <tr className={item.step === 'LAZER' ? 'bg-rose-50/60' : 'bg-white'}><td className="px-4 py-4"><FileThumbnail scope={item.previewScope} relativePath={item.previewRelativePath} fileName={item.fileName} className="h-14 w-14" /></td><td className="px-4 py-4">{item.fileName}</td><td className="px-4 py-4">{item.sizeInch}in</td><td className="px-4 py-4">{item.side}</td><td className="px-4 py-4">{item.qty}</td><td className="px-4 py-4"><StatusBadge label={item.step} tone={item.step === 'LAZER' ? 'red' : item.step === 'FRONT_BACK' ? 'blue' : 'orange'} /></td><td className="px-4 py-4">{item.reason}</td><td className="px-4 py-4">{item.time}</td><td className="px-4 py-4"><button type="button" onClick={() => onProcessed?.(item)} className="h-10 rounded-xl border border-emerald-300 px-4 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">Processed</button></td></tr>;
+export function ErrorRow({ item, onProcessed, onApprove }: { item: ErrorItem; onProcessed?: (item: ErrorItem) => void; onApprove?: (item: ErrorItem) => void }) {
+  return <tr className={item.step === 'LAZER' ? 'bg-rose-50/60' : 'bg-white'}><td className="px-4 py-4"><FileThumbnail scope={item.previewScope} relativePath={item.previewRelativePath} fileName={item.fileName} className="h-14 w-14" /></td><td className="px-4 py-4">{item.fileName}</td><td className="px-4 py-4">{item.sizeInch}in</td><td className="px-4 py-4">{item.side}</td><td className="px-4 py-4">{item.qty}</td><td className="px-4 py-4"><StatusBadge label={item.step} tone={item.step === 'LAZER' ? 'red' : item.step === 'FRONT_BACK' ? 'blue' : 'orange'} /></td><td className="px-4 py-4">{item.reason}</td><td className="px-4 py-4">{item.time}</td><td className="px-4 py-4"><div className="flex gap-2"><button type="button" onClick={() => onProcessed?.(item)} className="h-10 rounded-xl border border-emerald-300 px-3 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-50">Processed</button><button type="button" onClick={() => onApprove?.(item)} className="h-10 rounded-xl border border-amber-300 px-3 text-sm font-semibold text-amber-700 transition hover:bg-amber-50">Approve</button></div></td></tr>;
 }
 
 export function SheetRow({ item }: { item: SheetItem }) {

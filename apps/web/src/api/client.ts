@@ -23,10 +23,17 @@ export async function readJson<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
+export function thumbnailUrl(scope?: string, relativePath?: string, fileName?: string, version?: string) {
+  const path = relativePath ?? fileName;
+  if (!scope || !path) return undefined;
+  const cacheKey = version ? `&v=${encodeURIComponent(version)}` : '';
+  return `${apiBase}/thumbnails/${encodeURIComponent(scope)}?path=${encodeURIComponent(path)}${cacheKey}`;
+}
+
 export function previewUrl(scope?: string, relativePath?: string, fileName?: string, version?: string) {
   const path = relativePath ?? fileName;
   if (!scope || !path) return undefined;
-  const cacheKey = version ? `&v=${encodeURIComponent(version)}` : ''; 
+  const cacheKey = version ? `&v=${encodeURIComponent(version)}` : '';
   return `${apiBase}/files/${encodeURIComponent(scope)}?path=${encodeURIComponent(path)}${cacheKey}`;
 }
 

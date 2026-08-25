@@ -6,6 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { PNG } from "pngjs";
+import { runStartTestPrecheck } from "./start-precheck.ts";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const rootDir = path.resolve(__dirname, "..");
@@ -28,25 +29,35 @@ const waitPreviewDir = path.join(factoryRoot, ".runtime", "wait-previews");
 const ILLUSTRATOR_MAX_PNG_DIMENSION = Math.max(0, Number(process.env.ACRYLIC_ILLUSTRATOR_MAX_PNG_DIMENSION ?? 0));
 const LAZER_TRACE_MAX_PNG_DIMENSION = Math.max(0, Number(process.env.ACRYLIC_LAZER_TRACE_MAX_PNG_DIMENSION ?? ILLUSTRATOR_MAX_PNG_DIMENSION));
 const CHECK_FULL_PIPELINE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CHECK_FULL_PIPELINE ?? '');
+const PREVIEW_SORT_ONLY = /^(1|true|yes)$/i.test(process.env.ACRYLIC_PREVIEW_SORT_ONLY ?? '');
 const IGNORE_CHECK_FALSE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_IGNORE_CHECK_FALSE ?? '');
 const ERROR_COMPARE_ONLY = /^(1|true|yes)$/i.test(process.env.ACRYLIC_ERROR_COMPARE_ONLY ?? '');
+const CHECK_IMAGE_SIZE_ENABLED = !/^(0|false|no)$/i.test(process.env.ACRYLIC_CHECK_IMAGE_SIZE ?? 'true');
+const CHECK_TWO_SIDE_FACE_OFFSET_ENABLED = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CHECK_TWO_SIDE_FACE_OFFSET ?? 'false');
+const CHECK_FRONT_BACK_VS_LAZER_ENABLED = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CHECK_FRONT_BACK_VS_LAZER ?? 'false');
+const CHECK_FACE_TOLERANCE_CM = Math.max(0, Number(process.env.ACRYLIC_CHECK_FACE_TOLERANCE_CM ?? 0.01));
+const CHECK_CUT_TOLERANCE_CM = Math.max(0, Number(process.env.ACRYLIC_CHECK_CUT_TOLERANCE_CM ?? 0.05));
+const PRECHECK_START_ENABLED = /^(1|true|yes)$/i.test(process.env.ACRYLIC_TEST_PRECHECK ?? 'false');
 const USE_CHECK_MEASUREMENT = CHECK_FULL_PIPELINE || ERROR_COMPARE_ONLY;
 const SKIP_DERIVED_OUTPUT_EXPORT = /^(1|true|yes)$/i.test(process.env.ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT ?? '');
 const DEBUG_PIPELINE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_DEBUG_PIPELINE ?? '');
 const DEBUG_LAZER_STEPS = DEBUG_PIPELINE || /^(1|true|yes)$/i.test(process.env.ACRYLIC_DEBUG_LAZER_STEPS ?? '');
-const CHECKPOINT_ITEM_LIMIT = (DEBUG_LAZER_STEPS || CHECK_FULL_PIPELINE) ? 1 : Math.max(1, Number(process.env.ACRYLIC_CHECKPOINT_ITEM_LIMIT ?? 50));
+const CHECKPOINT_ITEM_LIMIT = (DEBUG_LAZER_STEPS || CHECK_FULL_PIPELINE || PREVIEW_SORT_ONLY) ? 1 : Math.max(1, Number(process.env.ACRYLIC_CHECKPOINT_ITEM_LIMIT ?? 50));
 const CHECKPOINT_PAUSE_MS = Math.max(0, Number(process.env.ACRYLIC_CHECKPOINT_PAUSE_MS ?? 5000));
 const CHECKPOINT_MODE = (process.env.ACRYLIC_CHECKPOINT_MODE ?? "stop").toLowerCase();
 const QUIT_ILLUSTRATOR_AFTER_SAVE = !/^(0|false|no)$/i.test(process.env.ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE ?? 'true');
 const CLOSE_DOCUMENT_AFTER_SAVE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE ?? '');
 const SHOULD_STOP_AFTER_CHECKPOINT = CHECKPOINT_MODE !== "continue";
-const JSX_BATCH_SIZE = CHECK_FULL_PIPELINE ? 1 : Math.max(1, Math.min(CHECKPOINT_ITEM_LIMIT, Number(process.env.ACRYLIC_JSX_BATCH_SIZE ?? (IGNORE_CHECK_FALSE ? 18 : CHECKPOINT_ITEM_LIMIT))));
+const JSX_BATCH_SIZE = (CHECK_FULL_PIPELINE || PREVIEW_SORT_ONLY) ? 1 : Math.max(1, Math.min(CHECKPOINT_ITEM_LIMIT, Number(process.env.ACRYLIC_JSX_BATCH_SIZE ?? (IGNORE_CHECK_FALSE ? 18 : CHECKPOINT_ITEM_LIMIT))));
 const UI_REDRAW_EVERY = Math.max(1, Number(process.env.ACRYLIC_UI_REDRAW_EVERY ?? 5));
 const WAIT_MIN_CAP_INCH = Number(process.env.ACRYLIC_WAIT_MIN_CAP_INCH ?? 3);
 const JSX_STALL_TIMEOUT_MS = Math.max(0, Number(process.env.ACRYLIC_ITEM_STALL_TIMEOUT_MS ?? (IGNORE_CHECK_FALSE ? 180000 : 0)));
 const coloredMetricsCache = new Map();
 const runtimeSourceCache = new Map();
 const placementMetricsCache = new Map();
+function isApprovedErrorImage(imagePath) {
+    try { const raw = readFileSync(path.join(imagesDir, '.approved-errors.json'), 'utf8'); const approved = JSON.parse(raw); return Boolean(approved && approved[path.basename(imagePath)]); } catch { return false; }
+}
 function getDatedDoneDir(now = new Date()) {
     const monthDir = `thang${now.getMonth() + 1}`;
     const datePart = `${now.getDate()}-${now.getMonth() + 1}-${String(now.getFullYear()).slice(-2)}`;
@@ -107,8 +118,8 @@ function isPng300Dpi(dpi) {
     return dpi.hasPhys && dpi.dpiX !== null && dpi.dpiY !== null && Math.abs(dpi.dpiX - 300) <= 0.5 && Math.abs(dpi.dpiY - 300) <= 0.5;
 }
 function formatPngDpi(dpi) {
-    if (!dpi.hasPhys) return 'không có metadata DPI (pHYs)';
-    if (dpi.dpiX === null || dpi.dpiY === null) return 'pHYs không ghi theo đơn vị DPI';
+    if (!dpi.hasPhys) return 'khÃ´ng cÃ³ metadata DPI (pHYs)';
+    if (dpi.dpiX === null || dpi.dpiY === null) return 'pHYs khÃ´ng ghi theo Ä‘Æ¡n vá»‹ DPI';
     return 'DPI X=' + dpi.dpiX.toFixed(2) + ', Y=' + dpi.dpiY.toFixed(2);
 }
 function getCheckSummaryLine(jsxResult) {
@@ -214,7 +225,7 @@ async function getPngImages(directoryPath) {
         .map((entry) => entry.name)
         .sort((left, right) => left.localeCompare(right, "en"));
     if (pngFiles.length === 0) {
-        throw new Error(`Không tìm thấy file .png trong thư mục ${directoryPath}`);
+        throw new Error(`KhÃ´ng tÃ¬m tháº¥y file .png trong thÆ° má»¥c ${directoryPath}`);
     }
     return pngFiles.map((fileName) => path.join(directoryPath, fileName));
 }
@@ -280,7 +291,7 @@ function normalizeJsxResultText(value) {
         return normalizeJsxResultText(JSON.parse(raw));
     }
     catch {
-        return { success: false, fit: false, message: "không đ𞳜 được kết quả JSX" };
+        return { success: false, fit: false, message: "khÃ´ng Ä‘ðž³œ Ä‘Æ°á»£c káº¿t quáº£ JSX" };
     }
 }
 async function readJsxProgress(progressPath) {
@@ -315,7 +326,7 @@ async function uniquePathFor(filePath) {
         if (!(await pathExists(candidate)))
             return candidate;
     }
-    throw new Error(`không tạo được tên file không trùng cho ${filePath}`);
+    throw new Error(`khÃ´ng táº¡o Ä‘Æ°á»£c tÃªn file khÃ´ng trÃ¹ng cho ${filePath}`);
 }
 async function writeImageErrorMetadata(fileName, metadata) {
     let current = {};
@@ -368,7 +379,7 @@ async function updateDoneHistory(sourceImagePath, imageBaseName, sizeLabel, adde
         await copyFile(sourceImagePath, nextPath);
     }
     else {
-        console.log('Bỏ qua cập nhật ảnh đã xong vì ảnh nguồn không còn: ' + sourceImagePath);
+        console.log('Bá» qua cáº­p nháº­t áº£nh Ä‘Ã£ xong vÃ¬ áº£nh nguá»“n khÃ´ng cÃ²n: ' + sourceImagePath);
         return null;
     }
     return nextPath;
@@ -414,7 +425,7 @@ function validateErrorModeCanvasSize(filePath, placementMetrics) {
         expectedHeightCm: expected.heightCm,
         sideCount: expected.sideCount,
         badgeReel: expected.badgeReel,
-        reason: `Sai kích thước ảnh: W=${actualWidthCm.toFixed(2)}cm, H=${actualHeightCm.toFixed(2)}cm; yêu cầu W=${expected.widthCm.toFixed(2)}cm, H=${expected.heightCm.toFixed(2)}cm (${expected.sideCount >= 2 ? '2 side' : expected.badgeReel ? 'badge-reel' : '1 side'}).`,
+        reason: `Sai kÃ­ch thÆ°á»›c áº£nh: W=${actualWidthCm.toFixed(2)}cm, H=${actualHeightCm.toFixed(2)}cm; yÃªu cáº§u W=${expected.widthCm.toFixed(2)}cm, H=${expected.heightCm.toFixed(2)}cm (${expected.sideCount >= 2 ? '2 side' : expected.badgeReel ? 'badge-reel' : '1 side'}).`,
     };
 }
 function parseItemQty(filePath) {
@@ -570,8 +581,12 @@ async function createRuntimeJsx(jsxTemplatePath, selectedImagePath, coloredMetri
         `var CODEX_RESULT_PATH = ${JSON.stringify(toJsxPath(resultPath))};`,
         `var CODEX_DEBUG_LAZER_STEPS = ${JSON.stringify(DEBUG_LAZER_STEPS)};`,
         `var CODEX_CHECK_FULL_PIPELINE = ${JSON.stringify(CHECK_FULL_PIPELINE)};`,
+        `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
+        `var CODEX_CHECK_IMAGE_SIZE_ENABLED = ${JSON.stringify(CHECK_IMAGE_SIZE_ENABLED)};`,
+        `var CODEX_CHECK_TWO_SIDE_FACE_OFFSET_ENABLED = ${JSON.stringify(CHECK_TWO_SIDE_FACE_OFFSET_ENABLED)};`,
+        `var CODEX_CHECK_FRONT_BACK_VS_LAZER_ENABLED = ${JSON.stringify(CHECK_FRONT_BACK_VS_LAZER_ENABLED)};`,
         `var CODEX_COLORED_METRICS = ${JSON.stringify(coloredMetrics)};`,
         source,
     ].join("\n");
@@ -614,14 +629,10 @@ async function ensureNormalizedAsset(job, kind, maxDimension) {
     return assetPath;
 }
 async function createIllustratorSafePngAsset(sourcePath, targetPath, maxDimension) {
-    if (maxDimension <= 0) {
-        await copyFile(sourcePath, targetPath);
-        return;
-    }
     const source = readPngTolerant(await readFile(sourcePath));
-    const scale = Math.min(1, maxDimension / Math.max(source.width, source.height));
+    const scale = maxDimension <= 0 ? 1 : Math.min(1, maxDimension / Math.max(source.width, source.height));
     if (scale === 1) {
-        await copyFile(sourcePath, targetPath);
+        await writeFile(targetPath, PNG.sync.write(source));
         return;
     }
     const width = Math.max(1, Math.round(source.width * scale));
@@ -700,8 +711,12 @@ async function createBatchRuntimeJsx(jsxTemplatePath, openTemplatePath, batchIte
         `var CODEX_PROGRESS_REDRAW_EVERY = ${JSON.stringify(UI_REDRAW_EVERY)};`,
         `var CODEX_DEBUG_LAZER_STEPS = ${JSON.stringify(DEBUG_LAZER_STEPS)};`,
         `var CODEX_CHECK_FULL_PIPELINE = ${JSON.stringify(CHECK_FULL_PIPELINE)};`,
+        `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
+        `var CODEX_CHECK_IMAGE_SIZE_ENABLED = ${JSON.stringify(CHECK_IMAGE_SIZE_ENABLED)};`,
+        `var CODEX_CHECK_TWO_SIDE_FACE_OFFSET_ENABLED = ${JSON.stringify(CHECK_TWO_SIDE_FACE_OFFSET_ENABLED)};`,
+        `var CODEX_CHECK_FRONT_BACK_VS_LAZER_ENABLED = ${JSON.stringify(CHECK_FRONT_BACK_VS_LAZER_ENABLED)};`,
         `var CODEX_BLOCKED_SIZE_KEYS = ${JSON.stringify(blockedSizeKeys)};`,
         `var CODEX_BATCH_ITEMS = ${JSON.stringify(payload)};`,
         source,
@@ -1063,7 +1078,7 @@ async function saveAiWithRetry(openDocumentPath, saveScriptPath, outputAiPath, v
             await sleep(3000);
         }
     }
-    throw new Error('Không thể lưu AI: ' + lastMessage);
+    throw new Error('KhÃ´ng thá»ƒ lÆ°u AI: ' + lastMessage);
 }
 async function main() {
     if (IGNORE_CHECK_FALSE)
@@ -1111,7 +1126,7 @@ async function main() {
                 }
             }
             else {
-                console.log('Images đã hết PNG, dừng lại.');
+                console.log('Images Ä‘Ã£ háº¿t PNG, dá»«ng láº¡i.');
             }
             break;
         }
@@ -1124,7 +1139,7 @@ async function main() {
             if (CHECK_FULL_PIPELINE) {
                 console.log('CHECK_DPI: ' + path.basename(imagePath) + ' | ' + placementMetrics.dpiText + ' | expected=300 DPI | ' + (placementMetrics.dpiOk ? 'true' : 'false'));
                 if (!placementMetrics.dpiOk) {
-                    const dpiReason = 'Ảnh đầu vào không đạt 300 DPI: ' + placementMetrics.dpiText + '. Yêu cầu DPI X/Y khoảng 300.';
+                    const dpiReason = 'áº¢nh Ä‘áº§u vÃ o khÃ´ng Ä‘áº¡t 300 DPI: ' + placementMetrics.dpiText + '. YÃªu cáº§u DPI X/Y khoáº£ng 300.';
                     await moveImageToError(imagePath, dpiReason, { step: 'CHECK_DPI_FALSE', expected: 'DPI X/Y=300', actual: placementMetrics.dpiText });
                     console.log('CHECK_DPI_FALSE: ' + path.basename(imagePath) + ' | ' + dpiReason);
                     continue;
@@ -1137,6 +1152,18 @@ async function main() {
                     console.log('SIZE_CHECK_FALSE: ' + path.basename(imagePath) + ' | ' + sizeCheck.reason);
                     continue;
                 }
+            }
+            if (PRECHECK_START_ENABLED && !isApprovedErrorImage(imagePath)) {
+                const actualWidthCm = placementMetrics.widthPoint / 72 * 2.54;
+                const actualHeightCm = placementMetrics.heightPoint / 72 * 2.54;
+                const precheck = await runStartTestPrecheck(imagePath, parseSideCount(imagePath), actualWidthCm, actualHeightCm, { faceToleranceCm: CHECK_FACE_TOLERANCE_CM, cutToleranceCm: CHECK_CUT_TOLERANCE_CM });
+                console.log('START_PRECHECK: ' + path.basename(imagePath) + ' | ' + precheck.step + ' | ' + (precheck.ok ? 'true' : 'false') + (precheck.reason ? ' | ' + precheck.reason : ''));
+                if (!precheck.ok) {
+                    await moveImageToError(imagePath, precheck.reason, { step: precheck.step, expected: 'Bá»™ pre-check giá»‘ng npm run test pháº£i true', actual: precheck.reason });
+                    continue;
+                }
+            } else if (PRECHECK_START_ENABLED) {
+                console.log('START_PRECHECK: ' + path.basename(imagePath) + ' | BYPASS_APPROVED_ERROR | true | approved=true');
             }
             jobs.push({
                 imagePath,
@@ -1284,18 +1311,18 @@ async function main() {
                             const back = compareEvidence.match(/backDeltaTrai=([^|]+)\| backDeltaPhai=([^|]+)\| backDeltaDuoi=([^|]+)/i);
                             const tolerance = compareEvidence.match(/(?:bottomTol|leftRightTol)=([^|]+)/i);
                             if (faceOffsetFailed && faceOffsetEvidence) return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: \u004c\u1ed7\u0069 \u006c\u1ec7\u0063\u0068 \u006d\u1eb7\u0074 2 side | ' + faceOffsetEvidence.replace(/^CHECK_LEFT_POINT_FRONT_BACK(?:_UPPER)?:\s*(true|false)\s*\|\s*/i, '');
-                            if (front && back) return 'Nguyên nhân: Front lệch trái=' + (front[1] || front[4]).trim() + ' | phải=' + (front[2] || front[5]).trim() + ' | dưới=' + (front[3] || front[6]).trim() + ' || Back lệch trái=' + back[1].trim() + ' | phải=' + back[2].trim() + ' | dưới=' + back[3].trim() + (tolerance ? ' | Sai số tối đa=' + tolerance[1].trim() : '');
-                            if (front) return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: Front lệch trái=' + (front[4] || front[1]).trim() + ' | phải=' + (front[5] || front[2]).trim() + ' | dưới=' + (front[6] || front[3]).trim() + (tolerance ? ' | Sai số tối đa=' + tolerance[1].trim() : '');
-                            if (/missing_front_measurement/i.test(compareEvidence)) return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: Không đọc được số đo Front theo kiểu bottom. Kiểm tra CHECK_EDGE_FRONT và CHECK_DATA FRONT.';
-                            if (/missing_lazer_measurement/i.test(compareEvidence)) return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: Không đọc được số đo Lazer. Kiểm tra CHECK_EDGE_LAZER và CHECK_DATA LAZER.';
+                            if (front && back) return 'NguyÃªn nhÃ¢n: Front lá»‡ch trÃ¡i=' + (front[1] || front[4]).trim() + ' | pháº£i=' + (front[2] || front[5]).trim() + ' | dÆ°á»›i=' + (front[3] || front[6]).trim() + ' || Back lá»‡ch trÃ¡i=' + back[1].trim() + ' | pháº£i=' + back[2].trim() + ' | dÆ°á»›i=' + back[3].trim() + (tolerance ? ' | Sai sá»‘ tá»‘i Ä‘a=' + tolerance[1].trim() : '');
+                            if (front) return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: Front lá»‡ch trÃ¡i=' + (front[4] || front[1]).trim() + ' | pháº£i=' + (front[5] || front[2]).trim() + ' | dÆ°á»›i=' + (front[6] || front[3]).trim() + (tolerance ? ' | Sai sá»‘ tá»‘i Ä‘a=' + tolerance[1].trim() : '');
+                            if (/missing_front_measurement/i.test(compareEvidence)) return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: KhÃ´ng Ä‘á»c Ä‘Æ°á»£c sá»‘ Ä‘o Front theo kiá»ƒu bottom. Kiá»ƒm tra CHECK_EDGE_FRONT vÃ  CHECK_DATA FRONT.';
+                            if (/missing_lazer_measurement/i.test(compareEvidence)) return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: KhÃ´ng Ä‘á»c Ä‘Æ°á»£c sá»‘ Ä‘o Lazer. Kiá»ƒm tra CHECK_EDGE_LAZER vÃ  CHECK_DATA LAZER.';
                             return '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e: ' + compareEvidence.replace(/^CHECK_COMPARE_1SIDE:\s*false\s*\|\s*/i, '').replace(/^CHECK_COMPARE_2SIDE:\s*false\s*\|\s*/i, '');
                         })();
                         const rawReason = fixVietnameseMojibake(String(result.reason || ''));
                         const detailedReason = compareReason || rawReason || fixVietnameseMojibake(String(result.message || 'CHECK_COMPARE_FALSE'));
-                        if (compareEvidence) console.log('CHECK lệch chi tiết: ' + unit.job.imageBaseName + ' | ' + compareEvidence);
-                        else if (evidenceLines.length) console.log('CHECK đo: ' + unit.job.imageBaseName + ' | ' + evidenceLines.filter((line) => line.indexOf('CHECK_DATA ') === 0 || line.indexOf('CHECK_EDGE_') === 0).join(' || '));
+                        if (compareEvidence) console.log('CHECK lá»‡ch chi tiáº¿t: ' + unit.job.imageBaseName + ' | ' + compareEvidence);
+                        else if (evidenceLines.length) console.log('CHECK Ä‘o: ' + unit.job.imageBaseName + ' | ' + evidenceLines.filter((line) => line.indexOf('CHECK_DATA ') === 0 || line.indexOf('CHECK_EDGE_') === 0).join(' || '));
                         if (!errorMovedPaths.has(unit.job.imagePath)) {
-                            await moveImageToError(unit.job.imagePath, detailedReason, { step: faceOffsetFailed ? 'CHECK_2SIDE_FACE_OFFSET' : String(result.message || 'CHECK_COMPARE_FALSE'), expected: faceOffsetFailed ? '\u004c\u1ed7\u0069 \u006c\u1ec7\u0063\u0068 \u006d\u1eb7\u0074 2 side: hai thanh Front/Back phải bằng nhau trong 0.01cm' : (Number(unit.job.sideCount) >= 2 ? '6 chênh lệch Lazer-Front/Back phải nằm trong sai số cho phép' : '3 chênh lệch Lazer-Front phải nằm trong sai số cho phép'), actual: detailedReason });
+                            await moveImageToError(unit.job.imagePath, detailedReason, { step: faceOffsetFailed ? 'CHECK_2SIDE_FACE_OFFSET' : String(result.message || 'CHECK_COMPARE_FALSE'), expected: faceOffsetFailed ? '\u004c\u1ed7\u0069 \u006c\u1ec7\u0063\u0068 \u006d\u1eb7\u0074 2 side: hai thanh Front/Back pháº£i báº±ng nhau trong 0.01cm' : (Number(unit.job.sideCount) >= 2 ? '6 chÃªnh lá»‡ch Lazer-Front/Back pháº£i náº±m trong sai sá»‘ cho phÃ©p' : '3 chÃªnh lá»‡ch Lazer-Front pháº£i náº±m trong sai sá»‘ cho phÃ©p'), actual: detailedReason });
                             errorMovedPaths.add(unit.job.imagePath);
                         }
                         console.log('CHECK false: ' + unit.job.imageBaseName + ' | ' + detailedReason);
@@ -1313,7 +1340,7 @@ async function main() {
                         if (!isNoFit && !errorMovedPaths.has(unit.job.imagePath)) {
                             await moveImageToError(unit.job.imagePath, reasonText, {
                                 step: messageText,
-                                expected: Number(unit.job.sideCount) >= 2 ? '6 chênh lệch Lazer-Front/Back phải bằng nhau' : '3 chênh lệch Lazer-Front/Back phải bằng nhau',
+                                expected: Number(unit.job.sideCount) >= 2 ? '6 chÃªnh lá»‡ch Lazer-Front/Back pháº£i báº±ng nhau' : '3 chÃªnh lá»‡ch Lazer-Front/Back pháº£i báº±ng nhau',
                                 actual: reasonText,
                             });
                             errorMovedPaths.add(unit.job.imagePath);
@@ -1321,7 +1348,7 @@ async function main() {
                         }
                         if (result && !isSkip) {
                             const extraReasonText = result.reason ? ' (' + fixVietnameseMojibake(String(result.reason)) + ')' : '';
-                            console.log((isNoFit ? 'No fit' : 'Item lỗi') + ': ' + unit.job.imageBaseName + ' at qty ' + unit.qtyIndex + extraReasonText + '; continue other sizes.');
+                            console.log((isNoFit ? 'No fit' : 'Item lá»—i') + ': ' + unit.job.imageBaseName + ' at qty ' + unit.qtyIndex + extraReasonText + '; continue other sizes.');
                         }
                         continue;
                     }
@@ -1357,7 +1384,11 @@ async function main() {
         }
         await processQueue();
         if (CHECK_FULL_PIPELINE) {
-            console.log(placedAnything ? 'CHECK_RESULT: true | giữ Illustrator mở để bạn xem kết quả.' : 'CHECK_RESULT: false | giữ Illustrator mở để bạn xem lỗi.');
+            console.log(placedAnything ? 'CHECK_RESULT: true | giá»¯ Illustrator má»Ÿ Ä‘á»ƒ báº¡n xem káº¿t quáº£.' : 'CHECK_RESULT: false | giá»¯ Illustrator má»Ÿ Ä‘á»ƒ báº¡n xem lá»—i.');
+            break;
+        }
+        if (PREVIEW_SORT_ONLY) {
+            console.log(placedAnything ? 'CHECK_RESULT: true | ?? trace v? s?p x?p 1 item; gi? Illustrator m? ?? xem.' : 'CHECK_RESULT: false | kh?ng s?p x?p ???c item.');
             break;
         }
         if (!placedAnything || sheetUpdates.length === 0) {
@@ -1374,7 +1405,7 @@ async function main() {
                 sheetIndex += 1;
                 continue;
             }
-            console.log('Không có item nào fit trên sheet này; giữ nguyên PNG trong Images.');
+            console.log('KhÃ´ng cÃ³ item nÃ o fit trÃªn sheet nÃ y; giá»¯ nguyÃªn PNG trong Images.');
             break;
         }
         const pendingCommitPayload = {
@@ -1442,10 +1473,9 @@ async function main() {
         console.log('Saved AI output: ' + outputInfo.filePath);
         sheetIndex += 1;
     }
-    console.log('Hoàn tất lệnh test.');
+    console.log('HoÃ n táº¥t lá»‡nh test.');
 }
 main().catch((error) => {
-    console.error('Tool chạy lỗi:', error instanceof Error ? error.message : error);
+    console.error('Tool cháº¡y lá»—i:', error instanceof Error ? error.message : error);
     process.exitCode = 1;
 });
-

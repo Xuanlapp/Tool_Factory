@@ -1,4 +1,4 @@
-﻿import { StrictMode, useEffect, useState } from 'react';
+import { StrictMode, useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
@@ -6,7 +6,7 @@ import { AppShell } from './layout/AppShell';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { getDashboardData, subscribeDashboard } from './api/repository';
 import type { DashboardData, DashboardSummary } from './api/types';
-import { DonePage, ErrorsPage, HistoryPage, OverviewPage, OutputsPage, QueuePage, SettingsPage, SheetsPage, ToolPage } from './pages';
+import { DonePage, ErrorsPage, HistoryPage, OverviewPage, OutputsPage, ProcessedPage, QueuePage, SettingsPage, SheetsPage, ToolPage } from './pages';
 import './styles.css';
 
 const queryClient = new QueryClient();
@@ -42,13 +42,24 @@ function ResponsiveAppScale() {
 function Loading() { return <div className="flex min-h-screen items-center justify-center bg-[#f8faff] text-lg text-slate-500">Đang tải Acrylic Production...</div>; }
 
 function DashboardRoutes() {
-  const dashboard = useQuery({ queryKey: ['dashboard'], queryFn: getDashboardData, refetchInterval: 10_000, staleTime: 2_000 });
+  const dashboard = useQuery({ queryKey: ['dashboard'], queryFn: getDashboardData, refetchInterval: 30_000, staleTime: 10_000 });
   const [live, setLive] = useState<Partial<DashboardSummary> | null>(null);
+  const lastFolderFingerprint = useRef('');
   const [preview, setPreview] = useState<{ src: string; fileName: string } | null>(null);
   useEffect(() => subscribeDashboard((summary) => {
     setLive(summary);
-    void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    const kpi = summary.kpi;
+    const fingerprint = [kpi?.queue, kpi?.done, kpi?.errors, kpi?.wait, kpi?.outputAi, kpi?.outputFront, kpi?.outputBack, kpi?.outputLazer].join('|');
+    if (fingerprint && lastFolderFingerprint.current && fingerprint !== lastFolderFingerprint.current) {
+      void queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    }
+    if (fingerprint) lastFolderFingerprint.current = fingerprint;
   }), []);
+  useEffect(() => {
+    const refreshFolders = () => { void queryClient.invalidateQueries({ queryKey: ['dashboard'] }); };
+    window.addEventListener('acrylic:folders-changed', refreshFolders);
+    return () => window.removeEventListener('acrylic:folders-changed', refreshFolders);
+  }, []);
   useEffect(() => {
     const openPreview = (event: Event) => setPreview((event as CustomEvent<{ src: string; fileName: string }>).detail);
     window.addEventListener('acrylic:preview-file', openPreview);
@@ -63,6 +74,7 @@ function DashboardRoutes() {
       <Route path="/tool" element={<ToolPage />} />
       <Route path="/sheets" element={<ToolPage />} />
       <Route path="/done" element={<DonePage data={data} />} />
+      <Route path="/processed" element={<ProcessedPage data={data} />} />
       <Route path="/errors" element={<ErrorsPage data={data} />} />
       <Route path="/outputs" element={<OutputsPage data={data} />} />
       <Route path="/history" element={<HistoryPage data={data} />} />
@@ -73,4 +85,3 @@ function DashboardRoutes() {
 }
 
 createRoot(document.getElementById('root')!).render(<StrictMode><QueryClientProvider client={queryClient}><BrowserRouter><DashboardRoutes /></BrowserRouter></QueryClientProvider></StrictMode>);
-

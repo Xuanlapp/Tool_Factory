@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
@@ -10,6 +10,7 @@ const toolRoot = path.join(root, 'Tool');
 const entries = [
   ['index', path.join(toolRoot, 'src', 'index.ts')],
   ['test-export-output-assets', path.join(toolRoot, 'src', 'test-export-output-assets.ts')],
+  ['test-import-one-image', path.join(toolRoot, 'src', 'test-import-one-image.ts')],
   ['check-image-width', path.join(toolRoot, 'src', 'check-image-width.ts')],
 ];
 

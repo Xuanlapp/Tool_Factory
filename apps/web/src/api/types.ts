@@ -1,6 +1,6 @@
-﻿import type { AgentSnapshot, FolderFileEntry, RunnerStatus } from '@acrylic/contracts';
+import type { AgentSnapshot, FolderFileEntry, RunnerStatus } from '@acrylic/contracts';
 
-export type AppRouteId = 'overview' | 'queue' | 'sheets' | 'done' | 'errors' | 'outputs' | 'history' | 'settings';
+export type AppRouteId = 'overview' | 'queue' | 'sheets' | 'done' | 'processed' | 'errors' | 'outputs' | 'history' | 'settings';
 export type SideMode = '1 side' | '2 side' | 'Lazer';
 export type JobStatus = 'queued' | 'waiting' | 'running' | 'placed' | 'partial' | 'wait_mismatch' | 'error' | 'done';
 export type ErrorStep = 'IMPORT_SIZE' | 'FRONT_BACK' | 'LAZER' | 'SAVE' | 'PACKING' | 'UNKNOWN';
@@ -198,6 +198,7 @@ export interface FolderSetting {
 
 export interface SettingsView {
   folders: FolderSetting[];
+  checkSettings?: { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number };
   nocodb: { enabled: boolean; eventsTableConfigured: boolean; snapshotsTableConfigured: boolean };
   sqlite: 'healthy' | 'warning';
   illustrator: 'connected' | 'offline';
@@ -209,6 +210,7 @@ export interface DashboardData {
   queue: QueueItem[];
   sheet: SheetView;
   done: DoneItem[];
+  processed: DoneItem[];
   errors: ErrorItem[];
   outputs: OutputGroup[];
   history: RunHistory[];
@@ -219,6 +221,3 @@ export interface DashboardData {
 }
 
 export type { FolderFileEntry };
-
-
-
