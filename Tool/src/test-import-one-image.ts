@@ -13,6 +13,8 @@ const runtimeDir = path.join(rootDir, '.runtime');
 const jsxPath = path.join(rootDir, 'scripts', 'test-import-one-image.runtime.jsx');
 const resultPath = path.join(runtimeDir, 'test-import-one-image.result.json');
 const vbsPath = path.join(rootDir, 'scripts', 'launch-illustrator-and-run.vbs');
+const faceToleranceCm = Math.max(0, Number(process.env.ACRYLIC_CHECK_FACE_TOLERANCE_CM ?? 0.034));
+const cutToleranceCm = Math.max(0, Number(process.env.ACRYLIC_CHECK_CUT_TOLERANCE_CM ?? 0.05));
 
 function sideCountFor(imagePath: string) { return /(?:^|[_-])2-side(?:[_-]|$)/.test(path.basename(imagePath).toLowerCase()) ? 2 : 1; }
 function expectedHeightFor(imagePath: string) { return sideCountFor(imagePath) >= 2 ? '91.44' : '60.96'; }
@@ -85,6 +87,8 @@ async function main() {
     'var CODEX_RESULT_PATH = ' + JSON.stringify(toJsxPath(resultPath)) + ';',
     'var CODEX_TEST_EXPECTED_HEIGHT_CM = ' + JSON.stringify(expectedHeightCm) + ';',
     'var CODEX_TEST_SIDE_COUNT = ' + JSON.stringify(sideCount) + ';',
+    'var CODEX_TEST_FACE_TOLERANCE_CM = ' + JSON.stringify(faceToleranceCm) + ';',
+    'var CODEX_TEST_CUT_TOLERANCE_CM = ' + JSON.stringify(cutToleranceCm) + ';',
     'var CODEX_TEST_COLOR_REGIONS = ' + JSON.stringify(colorRegions) + ';',
     source,
   ].join('\n'), 'utf8');

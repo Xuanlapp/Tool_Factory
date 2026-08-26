@@ -198,7 +198,7 @@ export interface FolderSetting {
 
 export interface SettingsView {
   folders: FolderSetting[];
-  checkSettings?: { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number };
+  checkSettings?: { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number; jsxBatchSize: number; itemGapCm: number };
   nocodb: { enabled: boolean; eventsTableConfigured: boolean; snapshotsTableConfigured: boolean };
   sqlite: 'healthy' | 'warning';
   illustrator: 'connected' | 'offline';

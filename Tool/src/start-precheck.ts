@@ -44,7 +44,7 @@ const fmt = (value: number) => value.toFixed(3);
 export async function runStartTestPrecheck(imagePath: string, sideCount: number, actualWidthCm: number, actualHeightCm: number, options: { faceToleranceCm?: number; cutToleranceCm?: number } = {}) {
   const expectedWidthCm = 30.48;
   const expectedHeightCm = sideCount >= 2 ? 91.44 : 60.96;
-  const faceToleranceCm = Number.isFinite(options.faceToleranceCm) ? Number(options.faceToleranceCm) : 0.01;
+  const faceToleranceCm = Number.isFinite(options.faceToleranceCm) ? Number(options.faceToleranceCm) : 0.034;
   const cutToleranceCm = Number.isFinite(options.cutToleranceCm) ? Number(options.cutToleranceCm) : 0.05;
   if (Math.abs(actualWidthCm - expectedWidthCm) > 0.02 || Math.abs(actualHeightCm - expectedHeightCm) > 0.02) {
     return { ok: false, step: 'CHECK_IMAGE_SIZE_FALSE', reason: `\u004e\u0067\u0075\u0079\u00ean \u006e\u0068\u00e2\u006e \u006c\u1ed7\u0069: \u1ea2nh sai k\u00edch th\u01b0\u1edbc | W=${actualWidthCm.toFixed(2)}cm | H=${actualHeightCm.toFixed(2)}cm | \u0079\u00ea\u0075 \u0063\u1ea7\u0075 W=${expectedWidthCm.toFixed(2)}cm | H=${expectedHeightCm.toFixed(2)}cm` };

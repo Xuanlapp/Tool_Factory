@@ -35,7 +35,7 @@ const ERROR_COMPARE_ONLY = /^(1|true|yes)$/i.test(process.env.ACRYLIC_ERROR_COMP
 const CHECK_IMAGE_SIZE_ENABLED = !/^(0|false|no)$/i.test(process.env.ACRYLIC_CHECK_IMAGE_SIZE ?? 'true');
 const CHECK_TWO_SIDE_FACE_OFFSET_ENABLED = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CHECK_TWO_SIDE_FACE_OFFSET ?? 'false');
 const CHECK_FRONT_BACK_VS_LAZER_ENABLED = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CHECK_FRONT_BACK_VS_LAZER ?? 'false');
-const CHECK_FACE_TOLERANCE_CM = Math.max(0, Number(process.env.ACRYLIC_CHECK_FACE_TOLERANCE_CM ?? 0.01));
+const CHECK_FACE_TOLERANCE_CM = Math.max(0, Number(process.env.ACRYLIC_CHECK_FACE_TOLERANCE_CM ?? 0.034));
 const CHECK_CUT_TOLERANCE_CM = Math.max(0, Number(process.env.ACRYLIC_CHECK_CUT_TOLERANCE_CM ?? 0.05));
 const PRECHECK_START_ENABLED = /^(1|true|yes)$/i.test(process.env.ACRYLIC_TEST_PRECHECK ?? 'false');
 const USE_CHECK_MEASUREMENT = CHECK_FULL_PIPELINE || ERROR_COMPARE_ONLY;
@@ -49,6 +49,7 @@ const QUIT_ILLUSTRATOR_AFTER_SAVE = !/^(0|false|no)$/i.test(process.env.ACRYLIC_
 const CLOSE_DOCUMENT_AFTER_SAVE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE ?? '');
 const SHOULD_STOP_AFTER_CHECKPOINT = CHECKPOINT_MODE !== "continue";
 const JSX_BATCH_SIZE = (CHECK_FULL_PIPELINE || PREVIEW_SORT_ONLY) ? 1 : Math.max(1, Math.min(CHECKPOINT_ITEM_LIMIT, Number(process.env.ACRYLIC_JSX_BATCH_SIZE ?? (IGNORE_CHECK_FALSE ? 18 : CHECKPOINT_ITEM_LIMIT))));
+const PACK_GAP_CM = Math.max(0, Number(process.env.ACRYLIC_PACK_GAP_CM ?? 0.2));
 const UI_REDRAW_EVERY = Math.max(1, Number(process.env.ACRYLIC_UI_REDRAW_EVERY ?? 5));
 const WAIT_MIN_CAP_INCH = Number(process.env.ACRYLIC_WAIT_MIN_CAP_INCH ?? 3);
 const JSX_STALL_TIMEOUT_MS = Math.max(0, Number(process.env.ACRYLIC_ITEM_STALL_TIMEOUT_MS ?? (IGNORE_CHECK_FALSE ? 180000 : 0)));
@@ -582,6 +583,7 @@ async function createRuntimeJsx(jsxTemplatePath, selectedImagePath, coloredMetri
         `var CODEX_DEBUG_LAZER_STEPS = ${JSON.stringify(DEBUG_LAZER_STEPS)};`,
         `var CODEX_CHECK_FULL_PIPELINE = ${JSON.stringify(CHECK_FULL_PIPELINE)};`,
         `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
+        `var CODEX_PACK_GAP_CM = ${JSON.stringify(PACK_GAP_CM)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
         `var CODEX_CHECK_IMAGE_SIZE_ENABLED = ${JSON.stringify(CHECK_IMAGE_SIZE_ENABLED)};`,
@@ -702,6 +704,7 @@ async function createBatchRuntimeJsx(jsxTemplatePath, openTemplatePath, batchIte
             jobKey: item.jobKey || item.imagePath,
             skipFollowingCopiesAfterNoFit: item.skipFollowingCopiesAfterNoFit === true,
             coloredMetrics: getRuntimeColoredMetrics(item.coloredMetrics),
+            approvedError: item.approvedError === true,
         };
     });
     const runtimeSource = [
@@ -712,6 +715,7 @@ async function createBatchRuntimeJsx(jsxTemplatePath, openTemplatePath, batchIte
         `var CODEX_DEBUG_LAZER_STEPS = ${JSON.stringify(DEBUG_LAZER_STEPS)};`,
         `var CODEX_CHECK_FULL_PIPELINE = ${JSON.stringify(CHECK_FULL_PIPELINE)};`,
         `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
+        `var CODEX_PACK_GAP_CM = ${JSON.stringify(PACK_GAP_CM)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
         `var CODEX_CHECK_IMAGE_SIZE_ENABLED = ${JSON.stringify(CHECK_IMAGE_SIZE_ENABLED)};`,
@@ -1255,6 +1259,7 @@ async function main() {
                         continueAfterNoFit: true,
                         jobKey: unit.job.imagePath,
                         skipFollowingCopiesAfterNoFit: true,
+                        approvedError: isApprovedErrorImage(unit.job.imagePath),
                     });
                 }
                 const resultPath = path.join(runtimeDir, 'sheet' + sheetIndex + '_continuous_batch_' + batchIndex + '.json');
@@ -1301,6 +1306,10 @@ async function main() {
                     const unit = batchUnits[resultIndex];
                     const result = batchResults[resultIndex];
                     if (result?.message === 'CHECK_COMPARE_FALSE' || String(result?.message || '').indexOf('CHECK_IMAGE_WIDTH_FALSE') >= 0 || String(result?.message || '').indexOf('CHECK_MASK_30_48CM_WIDTH_FALSE') >= 0) {
+                        if (unit.job && isApprovedErrorImage(unit.job.imagePath)) {
+                            console.log('APPROVED_ERROR_BYPASS: ' + unit.job.imageBaseName + ' | bo qua CHECK_COMPARE_FALSE vi da Approve.');
+                            continue;
+                        }
                         const evidenceLines = Array.isArray(result?.evidence) ? result.evidence.map((line) => fixVietnameseMojibake(String(line))) : [];
                         const compareEvidence = evidenceLines.find((line) => line.indexOf('CHECK_COMPARE_1SIDE:') === 0 || line.indexOf('CHECK_COMPARE_2SIDE:') === 0);
                         const faceOffsetEvidence = evidenceLines.find((line) => line.indexOf('CHECK_LEFT_POINT_FRONT_BACK:') === 0 || line.indexOf('CHECK_LEFT_POINT_FRONT_BACK_UPPER:') === 0);

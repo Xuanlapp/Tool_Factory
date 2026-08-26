@@ -6,8 +6,9 @@ var EQUAL_TOLERANCE_CM = 0.05;
 var CHECK_BOTTOM_TOLERANCE_CM = 0.05;
 var CHECK_LEFT_BAR_TOLERANCE_CM = 0.01;
 var PACK_MARGIN_CM = 2;
-var PACK_GAP_CM = 0.2;
+
 var PACK_MARGIN_POINT = PACK_MARGIN_CM * CM_TO_POINT;
+var PACK_GAP_CM = typeof CODEX_PACK_GAP_CM !== 'undefined' ? Math.max(0, Number(CODEX_PACK_GAP_CM)) : 0.2;
 var PACK_GAP_POINT = PACK_GAP_CM * CM_TO_POINT;
 var PACK_ROW_TOLERANCE_POINT = 0.25 * CM_TO_POINT;
 var LAZER_MASK_BLEED_CM = 0.25;
@@ -4492,8 +4493,10 @@ function runBatch() {
       writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'PRINT_READY', item, '');
       resetSharedSourceImport();
       if (PREVIEW_SORT_ONLY) addReport('CHECK_PREVIEW_SORT_ONLY: bo qua compare/check; tiep tuc scale va sap xep de xem.');
-      var shouldCheckCompare = !PREVIEW_SORT_ONLY;
-      var compareOk = PREVIEW_SORT_ONLY ? true : checkCompareMeasurements(CODEX_SIDE_COUNT);
+      var approvedErrorBypass = item && item.approvedError === true;
+      if (approvedErrorBypass) addReport('APPROVED_ERROR_BYPASS: bo qua compare/check false cho item da Approve.');
+      var shouldCheckCompare = !PREVIEW_SORT_ONLY && !approvedErrorBypass;
+      var compareOk = (PREVIEW_SORT_ONLY || approvedErrorBypass) ? true : checkCompareMeasurements(CODEX_SIDE_COUNT);
       if (!compareOk && IGNORE_CHECK_FALSE) {
         addReport('IGNORE_CHECK_FALSE: compare vẫn false; chuyển ảnh vào images_error, không pack item này.');
       }
@@ -4593,3 +4596,5 @@ try {
   } catch (writeError) {}
   throw error;
 }
+
+

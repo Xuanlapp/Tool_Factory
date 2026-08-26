@@ -4,12 +4,14 @@ var CODEX_TEMPLATE_PATH = typeof CODEX_TEMPLATE_PATH !== 'undefined' ? CODEX_TEM
 var CODEX_TEST_EXPECTED_HEIGHT_CM = typeof CODEX_TEST_EXPECTED_HEIGHT_CM !== 'undefined' ? CODEX_TEST_EXPECTED_HEIGHT_CM : '60.96';
 var CODEX_TEST_SIDE_COUNT = typeof CODEX_TEST_SIDE_COUNT !== 'undefined' ? Number(CODEX_TEST_SIDE_COUNT) : 1;
 var CODEX_TEST_COLOR_REGIONS = typeof CODEX_TEST_COLOR_REGIONS !== 'undefined' ? CODEX_TEST_COLOR_REGIONS : null;
+var CODEX_TEST_FACE_TOLERANCE_CM = typeof CODEX_TEST_FACE_TOLERANCE_CM !== 'undefined' ? Math.max(0, Number(CODEX_TEST_FACE_TOLERANCE_CM)) : 0.01;
+var CODEX_TEST_CUT_TOLERANCE_CM = typeof CODEX_TEST_CUT_TOLERANCE_CM !== 'undefined' ? Math.max(0, Number(CODEX_TEST_CUT_TOLERANCE_CM)) : 0.05;
 var TEST_TWO_SIDE_FAILURE_REASONS = [];
 function addTestTwoSideFailure(axis, frontValue, backValue, delta) {
   TEST_TWO_SIDE_FAILURE_REASONS.push(axis + ': Front=' + frontValue + 'cm | Back=' + backValue + 'cm | \u006c\u1ec7\u0063\u0068=' + delta + 'cm');
 }
 function testTwoSideFailureReason() {
-  return TEST_TWO_SIDE_FAILURE_REASONS.length ? '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e \u006c\u1ed7\u0069: 2 side bị \u006c\u1ec7\u0063\u0068, \u0076\u0075\u0069 \u006c\u00f2\u006e\u0067 \u006b\u0069\u1ec3\u006d \u0074\u0072\u0061 \u006c\u1ea1\u0069! | ' + TEST_TWO_SIDE_FAILURE_REASONS.join(' || ') + ' | \u0053\u0061\u0069 \u0073\u1ed1 \u0074\u1ed1\u0069 \u0111\u0061=0.01cm' : '';
+  return TEST_TWO_SIDE_FAILURE_REASONS.length ? '\u004e\u0067\u0075\u0079\u00ea\u006e \u006e\u0068\u00e2\u006e \u006c\u1ed7\u0069: 2 side bị \u006c\u1ec7\u0063\u0068, \u0076\u0075\u0069 \u006c\u00f2\u006e\u0067 \u006b\u0069\u1ec3\u006d \u0074\u0072\u0061 \u006c\u1ea1\u0069! | ' + TEST_TWO_SIDE_FAILURE_REASONS.join(' || ') + ' | Sai số tối đa=' + roundedTest(CODEX_TEST_FACE_TOLERANCE_CM) + 'cm' : '';
 }
 function writeResult(success, message) {
   if (!CODEX_RESULT_PATH) return;
@@ -116,13 +118,13 @@ function drawTestCheckLeftPointFrontBack(layer, sourceItem, colorRegions, frontM
   drawTestLine(layer, 'TEST_CHECK_LEFT_POINT_FRONT_LINE', [maskLeft, pair.front.point[1]], pair.front.point, blueColor);
   drawTestLine(layer, 'TEST_CHECK_LEFT_POINT_BACK_LINE', [maskLeft, pair.back.point[1]], pair.back.point, redColor);
   var delta = Math.round((pair.front.leftX - pair.back.leftX) * 1000) / 1000;
-  var ok = Math.abs(delta) <= 0.01;
+  var ok = Math.abs(delta) <= CODEX_TEST_FACE_TOLERANCE_CM;
   var frontLeftText = (Math.round(pair.front.leftX * 1000) / 1000) + 'cm';
   var backLeftText = (Math.round(pair.back.leftX * 1000) / 1000) + 'cm';
   drawTestText(layer, 'TEST_CHECK_LEFT_POINT_FRONT_LABEL', frontLeftText, [maskLeft + 4, pair.front.point[1] + 10], blueColor);
   drawTestText(layer, 'TEST_CHECK_LEFT_POINT_BACK_LABEL', backLeftText, [maskLeft + 4, pair.back.point[1] + 10], redColor);
   if (!ok) addTestTwoSideFailure('LEFT', Math.round(pair.front.leftX * 1000) / 1000, Math.round(pair.back.leftX * 1000) / 1000, delta);
-  var message = 'TEST_CHECK_LEFT_POINT_FRONT_BACK: ' + (ok ? 'true' : 'false') + ' | front.left=' + frontLeftText + ' | back.left=' + backLeftText + ' | deltaLeft=' + delta + 'cm | sharedYFront=' + (Math.round(pair.front.y * 1000) / 1000) + 'cm | sharedYBack=' + (Math.round(pair.back.y * 1000) / 1000) + 'cm | note=shared sparse-left row | tolerance=0.01cm';
+  var message = 'TEST_CHECK_LEFT_POINT_FRONT_BACK: ' + (ok ? 'true' : 'false') + ' | front.left=' + frontLeftText + ' | back.left=' + backLeftText + ' | deltaLeft=' + delta + 'cm | sharedYFront=' + (Math.round(pair.front.y * 1000) / 1000) + 'cm | sharedYBack=' + (Math.round(pair.back.y * 1000) / 1000) + 'cm | note=shared sparse-left row | tolerance=' + roundedTest(CODEX_TEST_FACE_TOLERANCE_CM) + 'cm';
   $.writeln(message);
   return message;
 }
@@ -166,13 +168,13 @@ function drawTestCheckTopPointFrontBack(layer, sourceItem, colorRegions, frontMa
   drawTestLine(layer, 'TEST_CHECK_TOP_POINT_FRONT_LINE', [pair.front.point[0], frontMaskTop], pair.front.point, blueColor);
   drawTestLine(layer, 'TEST_CHECK_TOP_POINT_BACK_LINE', [pair.back.point[0], backMaskTop], pair.back.point, redColor);
   var delta = Math.round((pair.front.topY - pair.back.topY) * 1000) / 1000;
-  var ok = Math.abs(delta) <= 0.01;
+  var ok = Math.abs(delta) <= CODEX_TEST_FACE_TOLERANCE_CM;
   var frontTopText = (Math.round(pair.front.topY * 1000) / 1000) + 'cm';
   var backTopText = (Math.round(pair.back.topY * 1000) / 1000) + 'cm';
   drawTestText(layer, 'TEST_CHECK_TOP_POINT_FRONT_LABEL', frontTopText, [pair.front.point[0] + 4, frontMaskTop - 12], blueColor);
   drawTestText(layer, 'TEST_CHECK_TOP_POINT_BACK_LABEL', backTopText, [pair.back.point[0] + 4, backMaskTop - 12], redColor);
   if (!ok) addTestTwoSideFailure('TOP', Math.round(pair.front.topY * 1000) / 1000, Math.round(pair.back.topY * 1000) / 1000, delta);
-  var message = 'TEST_CHECK_TOP_POINT_FRONT_BACK: ' + (ok ? 'true' : 'false') + ' | front.top=' + frontTopText + ' | back.top=' + backTopText + ' | deltaTop=' + delta + 'cm | sharedXFront=' + (Math.round(pair.front.x * 1000) / 1000) + 'cm | sharedXBack=' + (Math.round(pair.back.x * 1000) / 1000) + 'cm | note=shared left-side column | tolerance=0.01cm';
+  var message = 'TEST_CHECK_TOP_POINT_FRONT_BACK: ' + (ok ? 'true' : 'false') + ' | front.top=' + frontTopText + ' | back.top=' + backTopText + ' | deltaTop=' + delta + 'cm | sharedXFront=' + (Math.round(pair.front.x * 1000) / 1000) + 'cm | sharedXBack=' + (Math.round(pair.back.x * 1000) / 1000) + 'cm | note=shared left-side column | tolerance=' + roundedTest(CODEX_TEST_FACE_TOLERANCE_CM) + 'cm';
   $.writeln(message);
   return message;
 }
@@ -203,7 +205,7 @@ function testCutAlignment(sourceItem, sideCount, colorRegions, sourceBounds) {
   if (!front) return { ok: false, message: 'CHECK_CUT_ALIGNMENT: false | reason=missing_front_measurement' };
   var back = sideCount >= 2 ? testEdgeDistances(sourceItem, colorRegions, 'BACK', maskLeft, maskRight, backMaskTop - maskSize) : null;
   if (sideCount >= 2 && !back) return { ok: false, message: 'CHECK_CUT_ALIGNMENT: false | reason=missing_back_measurement' };
-  var tolerance = 0.05;
+  var tolerance = CODEX_TEST_CUT_TOLERANCE_CM;
   var leftFront = front.left - lazer.left;
   var rightFront = front.right - lazer.right;
   var bottomFront = front.bottom - lazer.bottom;
