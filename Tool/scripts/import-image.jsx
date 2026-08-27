@@ -22,6 +22,8 @@ var DEBUG_LAZER_STEPS_ENABLED = false;
 var PREVIEW_SORT_ONLY = false;
 try { PREVIEW_SORT_ONLY = typeof CODEX_PREVIEW_SORT_ONLY !== 'undefined' && CODEX_PREVIEW_SORT_ONLY === true; } catch (error) { PREVIEW_SORT_ONLY = false; }
 try { DEBUG_LAZER_STEPS_ENABLED = typeof CODEX_DEBUG_LAZER_STEPS !== 'undefined' && CODEX_DEBUG_LAZER_STEPS === true; } catch (error) { DEBUG_LAZER_STEPS_ENABLED = false; }
+var BYPASS_CHECKS = false;
+try { BYPASS_CHECKS = typeof CODEX_BYPASS_CHECKS !== 'undefined' && CODEX_BYPASS_CHECKS === true; } catch (error) { BYPASS_CHECKS = false; }
 var IGNORE_CHECK_FALSE = false;
 try { IGNORE_CHECK_FALSE = typeof CODEX_IGNORE_CHECK_FALSE !== 'undefined' && CODEX_IGNORE_CHECK_FALSE === true; } catch (error) { IGNORE_CHECK_FALSE = false; }
 var CHECK_IMAGE_SIZE_ENABLED = true;
@@ -3654,6 +3656,7 @@ function addCurrentBorderToPackContext(documentRef) {
 
 
 function packImagesOnSheet(parentLayer, documentRef) {
+  removeNamedPageItems(parentLayer, 'TEMP_PACK_GROUP_IMAGES');
   var lazerOutlineBeforeGroup = findNamedPageItem(parentLayer, lazerOutlineName());
   if (DEBUG_LAZER_STEPS_ENABLED && lazerOutlineBeforeGroup !== null) drawLongestEdgesDebug(documentRef, lazerOutlineBeforeGroup);
 
@@ -4004,6 +4007,22 @@ function normalizeLazerOutputNames(lazerLayer) {
   }
   return renamed;
 }
+function hasNamedPageItem(container, itemName) {
+  if (!container || !container.pageItems) return false;
+  for (var i = 0; i < container.pageItems.length; i += 1) {
+    try {
+      var item = container.pageItems[i];
+      if (item && item.name === itemName) return true;
+    } catch (error) {}
+  }
+  return false;
+}
+function assertNoTempPackArtifacts(parentLayer) {
+  if (hasNamedPageItem(parentLayer, 'TEMP_PACK_GROUP_IMAGES')) {
+    removeNamedPageItems(parentLayer, 'TEMP_PACK_GROUP_IMAGES');
+    throw new Error('TEMP_PACK_GROUP_IMAGES_REMAINED');
+  }
+}
 function finalMoveItemsToOutputLayers(documentRef, parentLayer) {
   removeDocumentLayer(documentRef, longestEdgesLayerName());
   try { ungroupCaseItems(parentLayer, 'TEMP_PACK_GROUP_IMAGES'); } catch (error) {}
@@ -4022,11 +4041,16 @@ function finalMoveItemsToOutputLayers(documentRef, parentLayer) {
   addReport('Moved BACK: ' + movedBack);
   addReport('Moved FRONT: ' + movedFront);
   addReport('Moved LAZER: ' + movedLazer);
+  var requiredPrintCount = isSingleBadgeFlow() ? movedFront : Math.min(movedFront, movedBack);
+  if (movedLazer < 1 || requiredPrintCount < 1) {
+    throw new Error('OUTPUT_LAYER_MOVE_INCOMPLETE: lazer=' + movedLazer + ' | front=' + movedFront + ' | back=' + movedBack);
+  }
   if (IGNORE_CHECK_FALSE) {
     var lazerNamesUpdated = normalizeLazerOutputNames(lazerLayer);
     if (lazerNamesUpdated > 0) addReport('ERROR mode LAZER clipping/name cleanup: ' + lazerNamesUpdated + ' item(s); removed MASK_FROM_ naming.');
   }
   addReport('QTY sequential item: ' + (typeof CODEX_QTY_INDEX !== 'undefined' ? CODEX_QTY_INDEX : 1) + '/' + (typeof CODEX_ITEM_QTY !== 'undefined' ? CODEX_ITEM_QTY : 1));
+  assertNoTempPackArtifacts(parentLayer);
 
 }
 
@@ -4456,6 +4480,7 @@ function runBatch() {
   writeProgress(0, CODEX_BATCH_ITEMS.length, 'START_BATCH', null, '');
   for (var i = 0; i < CODEX_BATCH_ITEMS.length; i += 1) {
     var item = CODEX_BATCH_ITEMS[i];
+    cleanupFailedItemArtifacts(documentRef, parentLayer);
     writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'DOING', item, '');
     CODEX_IMAGE_PATH = item.imagePath;
     CODEX_IMAGE_BASENAME = item.imageBaseName;
@@ -4493,10 +4518,11 @@ function runBatch() {
       writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'PRINT_READY', item, '');
       resetSharedSourceImport();
       if (PREVIEW_SORT_ONLY) addReport('CHECK_PREVIEW_SORT_ONLY: bo qua compare/check; tiep tuc scale va sap xep de xem.');
+      if (BYPASS_CHECKS) addReport('BYPASS_CHECKS: bỏ qua toàn bộ check lỗi; vẫn sắp xếp, xuất file và chuyển done.');
       var approvedErrorBypass = item && item.approvedError === true;
       if (approvedErrorBypass) addReport('APPROVED_ERROR_BYPASS: bo qua compare/check false cho item da Approve.');
-      var shouldCheckCompare = !PREVIEW_SORT_ONLY && !approvedErrorBypass;
-      var compareOk = (PREVIEW_SORT_ONLY || approvedErrorBypass) ? true : checkCompareMeasurements(CODEX_SIDE_COUNT);
+      var shouldCheckCompare = !PREVIEW_SORT_ONLY && !BYPASS_CHECKS && !approvedErrorBypass;
+      var compareOk = (PREVIEW_SORT_ONLY || BYPASS_CHECKS || approvedErrorBypass) ? true : checkCompareMeasurements(CODEX_SIDE_COUNT);
       if (!compareOk && IGNORE_CHECK_FALSE) {
         addReport('IGNORE_CHECK_FALSE: compare vẫn false; chuyển ảnh vào images_error, không pack item này.');
       }
@@ -4596,5 +4622,8 @@ try {
   } catch (writeError) {}
   throw error;
 }
+
+
+
 
 

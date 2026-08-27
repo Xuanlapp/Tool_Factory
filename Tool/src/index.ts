@@ -30,6 +30,7 @@ const ILLUSTRATOR_MAX_PNG_DIMENSION = Math.max(0, Number(process.env.ACRYLIC_ILL
 const LAZER_TRACE_MAX_PNG_DIMENSION = Math.max(0, Number(process.env.ACRYLIC_LAZER_TRACE_MAX_PNG_DIMENSION ?? ILLUSTRATOR_MAX_PNG_DIMENSION));
 const CHECK_FULL_PIPELINE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CHECK_FULL_PIPELINE ?? '');
 const PREVIEW_SORT_ONLY = /^(1|true|yes)$/i.test(process.env.ACRYLIC_PREVIEW_SORT_ONLY ?? '');
+const BYPASS_CHECKS = /^(1|true|yes)$/i.test(process.env.ACRYLIC_BYPASS_CHECKS ?? '');
 const IGNORE_CHECK_FALSE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_IGNORE_CHECK_FALSE ?? '');
 const ERROR_COMPARE_ONLY = /^(1|true|yes)$/i.test(process.env.ACRYLIC_ERROR_COMPARE_ONLY ?? '');
 const CHECK_IMAGE_SIZE_ENABLED = !/^(0|false|no)$/i.test(process.env.ACRYLIC_CHECK_IMAGE_SIZE ?? 'true');
@@ -583,6 +584,7 @@ async function createRuntimeJsx(jsxTemplatePath, selectedImagePath, coloredMetri
         `var CODEX_DEBUG_LAZER_STEPS = ${JSON.stringify(DEBUG_LAZER_STEPS)};`,
         `var CODEX_CHECK_FULL_PIPELINE = ${JSON.stringify(CHECK_FULL_PIPELINE)};`,
         `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
+        `var CODEX_BYPASS_CHECKS = ${JSON.stringify(BYPASS_CHECKS)};`,
         `var CODEX_PACK_GAP_CM = ${JSON.stringify(PACK_GAP_CM)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
@@ -715,6 +717,7 @@ async function createBatchRuntimeJsx(jsxTemplatePath, openTemplatePath, batchIte
         `var CODEX_DEBUG_LAZER_STEPS = ${JSON.stringify(DEBUG_LAZER_STEPS)};`,
         `var CODEX_CHECK_FULL_PIPELINE = ${JSON.stringify(CHECK_FULL_PIPELINE)};`,
         `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
+        `var CODEX_BYPASS_CHECKS = ${JSON.stringify(BYPASS_CHECKS)};`,
         `var CODEX_PACK_GAP_CM = ${JSON.stringify(PACK_GAP_CM)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
@@ -844,6 +847,26 @@ async function updateRemainingImage(job, remainingQty, targetDir) {
     const nextPath = await uniquePathFor(wantedPath);
     await rename(job.imagePath, nextPath);
     return nextPath;
+}
+async function commitPlacedImageUpdate(update) {
+    if (!update || !update.job)
+        throw new Error('INVALID_SHEET_UPDATE');
+    const placedQty = Math.max(0, Number(update.placedQty || 0));
+    const originalQty = Math.max(1, Number(update.job.itemQty || 1));
+    const remainingQty = Math.max(0, Number(update.remainQty || 0));
+    if (placedQty <= 0 || placedQty + remainingQty !== originalQty)
+        throw new Error('INVALID_QTY_COMMIT: placed=' + placedQty + ', remain=' + remainingQty + ', original=' + originalQty + ' | ' + update.job.imageBaseName);
+    if (remainingQty > 0) {
+        const remainingPath = await updateRemainingImage(update.job, remainingQty, imagesDir);
+        if (!remainingPath || !(await pathExists(remainingPath)))
+            throw new Error('REMAINING_IMAGE_MISSING: remain=' + remainingQty + ' | ' + update.job.imageBaseName);
+        await updateDoneHistory(remainingPath, update.job.imageBaseName, update.job.sizeLabel, placedQty);
+        console.log('PARTIAL_QTY_SAVED: placed=' + placedQty + ' | remain=' + remainingQty + ' | Images=' + path.basename(remainingPath));
+        return;
+    }
+    await updateDoneHistory(update.job.imagePath, update.job.imageBaseName, update.job.sizeLabel, placedQty);
+    await updateRemainingImage(update.job, 0, imagesDir);
+    console.log('FULL_QTY_DONE: placed=' + placedQty + ' | remain=0 | ' + update.job.imageBaseName);
 }
 async function normalizeLegacyRemainingImages() {
     const imagePaths = await getPngImagesIfAny(imagesDir);
@@ -1002,8 +1025,7 @@ async function applyPendingCommitIfAny() {
     if (!payload)
         return false;
     for (const update of payload.sheetUpdates) {
-        await updateDoneHistory(update.job.imagePath, update.job.imageBaseName, update.job.sizeLabel, update.placedQty);
-        await updateRemainingImage(update.job, update.remainQty, imagesDir);
+        await commitPlacedImageUpdate(update);
         console.log('Recovered commit: ' + update.placedQty + ', remain ' + update.remainQty + ': ' + update.job.imageBaseName);
     }
     await clearPendingCommit();
@@ -1423,8 +1445,7 @@ async function main() {
         const commitProcessedImages = async () => {
             await writePendingCommit(pendingCommitPayload);
             for (const update of sheetUpdates) {
-                await updateDoneHistory(update.job.imagePath, update.job.imageBaseName, update.job.sizeLabel, update.placedQty);
-                await updateRemainingImage(update.job, update.remainQty, imagesDir);
+                await commitPlacedImageUpdate(update);
                 console.log('Placed ' + update.placedQty + ', remain ' + update.remainQty + ': ' + update.job.imageBaseName);
             }
             await clearPendingCommit();
@@ -1488,3 +1509,8 @@ main().catch((error) => {
     console.error('Tool cháº¡y lá»—i:', error instanceof Error ? error.message : error);
     process.exitCode = 1;
 });
+
+
+
+
+

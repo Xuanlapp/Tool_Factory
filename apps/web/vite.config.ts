@@ -36,7 +36,7 @@ function fixVietnameseMojibake(value: unknown): unknown {
 }
 
 type RunnerStatus = 'idle' | 'running' | 'error';
-type ToolCommand = 'start' | 'check' | 'test';
+type ToolCommand = 'start' | 'all' | 'check' | 'test';
 type ExportAssetKind = 'front' | 'back' | 'lazer';
 type RunKind = 'tool' | 'export' | 'setup';
 type ToolStep = { index: number; total: number; step: string; fileName: string; status: 'running' | 'success' | 'error'; message: string };
@@ -117,7 +117,8 @@ function normalizeFolderPath(inputPath: string): NormalizedFolderPath {
   const mappedDrive = mappedDriveOf(trimmed);
   if (!mappedDrive) return { inputPath, normalizedPath: normalizePathSlashes(trimmed), network: false, uncResolved: false };
   const remote = resolveMappedDriveRemote(mappedDrive);
-  if (!remote) return { inputPath, normalizedPath: normalizePathSlashes(trimmed), network: true, mappedDrive, uncResolved: false, warning: `Ổ mạng ${mappedDrive} chưa kết nối hoặc chưa đọc được mapping NAS. Hãy kiểm tra kết nối NAS và Windows Credential Manager.` };
+  // A drive letter without a NAS mapping is a normal local Windows drive.
+  if (!remote) return { inputPath, normalizedPath: normalizePathSlashes(trimmed), network: false, uncResolved: false };
   const rest = trimmed.slice(mappedDrive.length).replace(/^[\\/]+/, '');
   return { inputPath, normalizedPath: rest ? path.win32.join(remote, rest) : remote, network: true, mappedDrive, uncResolved: true };
 }
@@ -155,14 +156,33 @@ let activeRun: ToolRun | null = null;
 const toolEventClients = new Set<import('node:http').ServerResponse>();
 const logLimit = 2000;
 
+function nextAvailableMoveTarget(targetPath: string): string {
+  if (!existsSync(targetPath)) return targetPath;
+  const extension = path.extname(targetPath);
+  const stem = targetPath.slice(0, targetPath.length - extension.length);
+  let index = 1;
+  let candidate = `${stem} (${index})${extension}`;
+  while (existsSync(candidate)) { index += 1; candidate = `${stem} (${index})${extension}`; }
+  return candidate;
+}
 function moveFolderContents(fromDir: string, toDir: string) {
   mkdirSync(toDir, { recursive: true });
   if (!existsSync(fromDir)) return;
   for (const entry of fs.readdirSync(fromDir, { withFileTypes: true })) {
     const source = path.join(fromDir, entry.name);
-    const target = path.join(toDir, entry.name);
-    if (entry.isDirectory()) { moveFolderContents(source, target); try { fs.rmSync(source, { recursive: true, force: true }); } catch {} continue; }
-    try { renameSync(source, target); } catch { fs.copyFileSync(source, target); fs.rmSync(source, { force: true }); }
+    if (entry.isDirectory()) {
+      const targetDir = path.join(toDir, entry.name);
+      moveFolderContents(source, targetDir);
+      try { fs.rmSync(source, { recursive: true, force: true }); } catch {}
+      continue;
+    }
+    const target = nextAvailableMoveTarget(path.join(toDir, entry.name));
+    try {
+      renameSync(source, target);
+    } catch {
+      fs.copyFileSync(source, target);
+      fs.rmSync(source, { force: true });
+    }
   }
 }
 
@@ -213,15 +233,38 @@ function moveErrorToProcessed(relativePath: string) {
 function approvedErrorsPath() { return path.join(folderPaths.Images, '.approved-errors.json'); }
 function readApprovedErrors(): Record<string, Record<string, unknown>> { try { return JSON.parse(readFileSync(approvedErrorsPath(), 'utf8')) as Record<string, Record<string, unknown>>; } catch { return {}; } }
 function moveErrorToImagesWithApproval(relativePath: string) {
-  const sourceRoot = folderPaths.images_error; const targetRoot = folderPaths.Images;
+  const sourceRoot = folderPaths.images_error;
+  const targetRoot = folderPaths.Images;
   const source = resolveFileInside(sourceRoot, relativePath);
-  if (!existsSync(source) || !fs.statSync(source).isFile()) throw new Error('Kh?ng t?m th?y ?nh l?i c?n ch?p nh?n.');
-  const target = resolveFileInside(targetRoot, path.basename(relativePath)); mkdirSync(path.dirname(target), { recursive: true });
+  if (!existsSync(source) || !fs.statSync(source).isFile()) throw new Error('Không tìm thấy ảnh lỗi cần chấp nhận.');
+  const target = resolveFileInside(targetRoot, path.basename(relativePath));
+  mkdirSync(path.dirname(target), { recursive: true });
   let finalTarget = target;
-  if (existsSync(finalTarget)) { const extension = path.extname(target); const baseName = target.slice(0, -extension.length); let duplicateIndex = 2; while (existsSync(baseName + '_dup' + duplicateIndex + extension)) duplicateIndex += 1; finalTarget = baseName + '_dup' + duplicateIndex + extension; }
-  try { renameSync(source, finalTarget); } catch { fs.copyFileSync(source, finalTarget); fs.rmSync(source, { force: true }); }
-  const approved = readApprovedErrors(); approved[path.basename(finalTarget)] = { approvedAt: new Date().toISOString(), sourceRelativePath: relativePath };
-  writeFileSync(approvedErrorsPath(), JSON.stringify(approved, null, 2), 'utf8'); cachedSnapshot = null; cacheExpiresAt = 0; return path.relative(targetRoot, finalTarget);
+  if (existsSync(finalTarget)) {
+    const extension = path.extname(target);
+    const baseName = target.slice(0, -extension.length);
+    let duplicateIndex = 2;
+    while (existsSync(baseName + '_dup' + duplicateIndex + extension)) duplicateIndex += 1;
+    finalTarget = baseName + '_dup' + duplicateIndex + extension;
+  }
+  let moved = false;
+  try {
+    renameSync(source, finalTarget);
+    moved = existsSync(finalTarget);
+  } catch {
+    fs.copyFileSync(source, finalTarget);
+    moved = existsSync(finalTarget);
+    if (moved) {
+      try { fs.rmSync(source, { force: true }); } catch {}
+    }
+  }
+  if (!moved || !existsSync(finalTarget)) throw new Error('Không thể chuyển ảnh đã approve về Images.');
+  const approved = readApprovedErrors();
+  approved[path.basename(finalTarget)] = { approvedAt: new Date().toISOString(), sourceRelativePath: relativePath };
+  writeFileSync(approvedErrorsPath(), JSON.stringify(approved, null, 2), 'utf8');
+  cachedSnapshot = null;
+  cacheExpiresAt = 0;
+  return path.relative(targetRoot, finalTarget);
 }
 
 function persistToolState() {
@@ -517,7 +560,9 @@ function runTool(command: ToolCommand) {
     ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '1', ACRYLIC_CHECKPOINT_MODE: 'stop', ACRYLIC_JSX_BATCH_SIZE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '0' }
     : command === 'test'
       ? { ACRYLIC_TEST_IMPORT_ONE_IMAGE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
-      : { ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
+      : command === 'all'
+        ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
+        : { ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
   const executablePath = command === 'test' ? path.join(toolDir, 'dist-bundle', 'test-import-one-image.cjs') : path.join(toolDir, 'dist-bundle', 'index.cjs');  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
   launchPersistentOperation(run, 'node', [executablePath], commandEnv);
   return { ok: true, message: 'Đã chạy Tool ' + command + '.', run: activeRun };
@@ -903,7 +948,7 @@ function localFilesystemApi(): Plugin {
               return;
             }
             const command = payload.command;
-            if (!['start', 'check', 'test'].includes(String(command))) {
+            if (!['start', 'all', 'check', 'test'].includes(String(command))) {
               json(response, { ok: false, message: 'Lệnh Tool không hợp lệ.', run: toolStatus().run }, 400);
               return;
             }
@@ -1011,3 +1056,12 @@ function localFilesystemApi(): Plugin {
 }
 
 export default defineConfig({ plugins: [localFilesystemApi(), react(), tailwindcss()] });
+
+
+
+
+
+
+
+
+
