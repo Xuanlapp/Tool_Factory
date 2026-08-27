@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { access, copyFile, mkdir, readFile, readdir, rename, rm, stat, writeFile } from "node:fs/promises";
-import { constants } from "node:fs";
+import { constants, readFileSync } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -15,6 +15,7 @@ const templatePath = process.env.ACRYLIC_TEMPLATE_PATH ?? "D:/FFactory/Arcylic/t
 const imagesDir = process.env.ACRYLIC_IMAGES_DIR ?? "D:/FFactory/Arcylic/Images";
 const imagesErrorDir = process.env.ACRYLIC_IMAGES_ERROR_DIR ?? "D:/FFactory/Arcylic/images_error";
 const imagesErrorMetadataPath = path.join(imagesErrorDir, '.error-metadata.json');
+const approvedErrorsPath = path.join(imagesDir, '.approved-errors.json');
 const imagesDoneDir = process.env.ACRYLIC_IMAGES_DONE_DIR ?? "D:/FFactory/Arcylic/imgaes_done";
 const runtimeDir = path.join(rootDir, ".runtime");
 const outputAiDir = process.env.ACRYLIC_OUTPUT_AI_DIR ?? "D:/FFactory/Arcylic/output_ai";
@@ -58,7 +59,17 @@ const coloredMetricsCache = new Map();
 const runtimeSourceCache = new Map();
 const placementMetricsCache = new Map();
 function isApprovedErrorImage(imagePath) {
-    try { const raw = readFileSync(path.join(imagesDir, '.approved-errors.json'), 'utf8'); const approved = JSON.parse(raw); return Boolean(approved && approved[path.basename(imagePath)]); } catch { return false; }
+    const imageName = path.basename(imagePath);
+    try {
+        const approved = JSON.parse(readFileSync(approvedErrorsPath, 'utf8'));
+        if (approved && approved[imageName]) {
+            console.log('APPROVAL_LOOKUP: ' + imageName + ' | approved=true | marker=' + approvedErrorsPath);
+            return true;
+        }
+    }
+    catch { }
+    console.log('APPROVAL_LOOKUP: ' + imageName + ' | approved=false | marker=' + approvedErrorsPath);
+    return false;
 }
 function getDatedDoneDir(now = new Date()) {
     const monthDir = `thang${now.getMonth() + 1}`;
