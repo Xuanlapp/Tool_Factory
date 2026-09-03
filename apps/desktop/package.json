@@ -16,7 +16,7 @@
         "typescript": "latest"
     },
     "productName": "Acrylic Factory",
-    "version": "0.2.9",
+    "version": "0.3.0",
     "main": "src/main.cjs",
     "build": {
         "appId": "com.ffactory.acrylic",

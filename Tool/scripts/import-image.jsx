@@ -521,6 +521,12 @@ function resetSharedSourceImport() {
   SHARED_SOURCE_LAYER = null;
 }
 
+function removeOrphanedSharedSourceImports(parentLayer) {
+  if (!parentLayer) return;
+  try { removeSublayer(parentLayer, 'SOURCE_PNG_IMPORT_ONCE'); } catch (error) {}
+  try { removeNamedPageItems(parentLayer, 'IMAGE_SOURCE_ONCE'); } catch (error) {}
+}
+
 function sharedSourceRaster(documentRef, parentLayer) {
   if (SHARED_SOURCE_IMPORT !== null) return SHARED_SOURCE_IMPORT;
   SHARED_SOURCE_LAYER = parentLayer.layers.add();
@@ -1861,11 +1867,14 @@ function findTemplateItemInMargin(layerRef) {
 }
 
 function collectSelectablePageItems(container, list, skipDebugBounds) {
-  if (container.name && (String(container.name).toLowerCase() === 'margin' || String(container.name).toLowerCase() === 'border')) return;
+  var containerName = String(container.name || '').toLowerCase();
+  // The shared PNG is temporary and must not be packed with the artwork.
+  if (containerName === 'margin' || containerName === 'border' || containerName === 'source_png_import_once') return;
   for (var i = 0; i < container.pageItems.length; i += 1) {
     try {
       var item = container.pageItems[i];
       unlockAndShow(item);
+      if (String(item.name || '') === 'IMAGE_SOURCE_ONCE') continue;
       if (skipDebugBounds && item.name && item.name.indexOf('DEBUG_BLACK_PIXEL_BOUNDS_') === 0) continue;
       list.push(item);
     } catch (error) {}
@@ -2826,7 +2835,7 @@ function normalizeRotationForFit(angle) {
 }
 
 function deriveBorderAngles(obstaclePolygons) {
-  var angles = [0, 90];
+  var angles = [0, 90, 180, 270];
   if (!obstaclePolygons || obstaclePolygons.length === 0) return angles;
   for (var p = 0; p < obstaclePolygons.length; p += 1) {
     var edges = getLongestEdgesFromPoints(obstaclePolygons[p]);
@@ -3256,7 +3265,7 @@ function stickerStyleFreeRects(templateBounds, obstacles) {
   return freeRects;
 }
 
-function chooseBestPlacementForItem(outline, templateBounds, obstacles, obstaclePolygons, obstacleCollisionIndex) {
+function chooseBestPlacementForItem(outline, templateBounds, obstacles, obstaclePolygons, obstacleCollisionIndex, cachedFreeRects) {
   var points = outlineAnchorPoints(outline);
   if (!points || points.length < 2) return null;
   var originalBounds = pointsBounds(points);
@@ -3277,7 +3286,8 @@ function chooseBestPlacementForItem(outline, templateBounds, obstacles, obstacle
   }
   if (rotatedOptions.length === 0) return null;
 
-  var freeRects = stickerStyleFreeRects(templateBounds, obstacles);
+  var freeRects = cachedFreeRects || stickerStyleFreeRects(templateBounds, obstacles);
+  var bestFreePlacement = null;
   for (var r = 0; r < freeRects.length; r += 1) {
     var freeRect = freeRects[r];
     for (var o = 0; o < rotatedOptions.length; o += 1) {
@@ -3296,11 +3306,30 @@ function chooseBestPlacementForItem(outline, templateBounds, obstacles, obstacle
       if (!boundsInsideTemplate(placed, templateBounds)) continue;
       if (collidesOrTooClose(placed, obstacles)) continue;
 
+      var contactScore = countTemplateTouches(placed, templateBounds) * 100000;
+      var overlapTolerance = Math.max(1.5, PACK_GAP_POINT + 1.5);
+      for (var obstacleIndex = 0; obstacleIndex < obstacles.length; obstacleIndex += 1) {
+        var obstacle = obstacles[obstacleIndex];
+        var horizontalOverlap = Math.max(0, Math.min(placed.right, obstacle.right) - Math.max(placed.left, obstacle.left));
+        var verticalOverlap = Math.max(0, Math.min(placed.top, obstacle.top) - Math.max(placed.bottom, obstacle.bottom));
+        if (horizontalOverlap > 1.5) {
+          if (Math.abs(placed.bottom - obstacle.top) <= overlapTolerance || Math.abs(placed.top - obstacle.bottom) <= overlapTolerance) contactScore += 10000 + horizontalOverlap;
+        }
+        if (verticalOverlap > 1.5) {
+          if (Math.abs(placed.left - obstacle.right) <= overlapTolerance || Math.abs(placed.right - obstacle.left) <= overlapTolerance) contactScore += 10000 + verticalOverlap;
+        }
+      }
+      // Prefer the upper-leftmost candidate only after maximizing edge contact.
+      contactScore -= ((placed.left - templateBounds.left) + (templateBounds.top - placed.top)) * 0.01;
       var dx = placed.left - rotatedBounds.left;
       var dy = placed.top - rotatedBounds.top;
-      return { angle: option.angle, dx: dx, dy: dy, placedBounds: placed, score: -r };
+      if (bestFreePlacement === null || contactScore > bestFreePlacement.score) {
+        bestFreePlacement = { angle: option.angle, dx: dx, dy: dy, placedBounds: placed, score: contactScore };
+      }
     }
   }
+
+  if (bestFreePlacement !== null) return bestFreePlacement;
 
   return findFreePlacementInsideTemplate(originalBounds, templateBounds, obstacles);
 }
@@ -3579,7 +3608,7 @@ function chooseBestPlacementPolygonFallback(outline, templateBounds, obstaclePol
   if (!points || points.length < 2) return null;
   var originalBounds = pointsBounds(points);
   var center = { x: (originalBounds.left + originalBounds.right) / 2, y: (originalBounds.top + originalBounds.bottom) / 2 };
-  var angles = [0, 90, 180, 270, 15, 345];
+  var angles = [0, 90, 180, 270];
   var best = null;
   for (var a = 0; a < angles.length; a += 1) {
     var angle = angles[a];
@@ -3627,7 +3656,8 @@ function resetPackContext(documentRef) {
     borderPolygons: borderPolygons,
     borderCollisionIndex: buildPolygonCollisionIndex(borderPolygons),
     packArea: packArea,
-    templateBounds: { left: packArea.left, top: packArea.top, right: packArea.right, bottom: packArea.bottom }
+    templateBounds: { left: packArea.left, top: packArea.top, right: packArea.right, bottom: packArea.bottom },
+    freeRects: stickerStyleFreeRects({ left: packArea.left, top: packArea.top, right: packArea.right, bottom: packArea.bottom }, borderObstacles)
   };
   return CODEX_PACK_CONTEXT;
 }
@@ -3645,6 +3675,16 @@ function addCurrentBorderToPackContext(documentRef) {
     if (outline === null) return;
     var bounds = boundsOf(outline);
     if (bounds !== null) context.borderObstacles.push(bounds);
+    if (bounds !== null && context.freeRects) {
+      var usedLeft = Math.max(context.templateBounds.left, bounds.left - PACK_GAP_POINT);
+      var usedRight = Math.min(context.templateBounds.right, bounds.right + PACK_GAP_POINT);
+      var usedTop = Math.min(context.templateBounds.top, bounds.top + PACK_GAP_POINT);
+      var usedBottom = Math.max(context.templateBounds.bottom, bounds.bottom - PACK_GAP_POINT);
+      var usedRect = { x: usedLeft, y: usedTop, w: usedRight - usedLeft, h: usedTop - usedBottom };
+      var nextFreeRects = [];
+      for (var freeIndex = 0; freeIndex < context.freeRects.length; freeIndex += 1) splitFreeRect(context.freeRects[freeIndex], usedRect, nextFreeRects);
+      context.freeRects = prunePackingFreeRects(nextFreeRects);
+    }
     var points = pathPointsToPolygon(outline);
     if (points && points.length >= 3) {
       context.borderPolygons.push(points);
@@ -3652,6 +3692,40 @@ function addCurrentBorderToPackContext(documentRef) {
       if (entryBounds !== null) context.borderCollisionIndex.push({ points: points, bounds: entryBounds, segments: polygonSegments(points) });
     }
   } catch (error) {}
+}
+
+// Quickly reject items that cannot fit any rectangular opening. Polygon packing remains the final authority.
+function quickRectangularFit(outline, templateBounds, obstacles) {
+  var original = boundsOf(outline);
+  if (original === null) return false;
+  var sizes = [
+    { width: original.width, height: original.height },
+    { width: original.height, height: original.width }
+  ];
+  var xCandidates = [templateBounds.left];
+  var yCandidates = [templateBounds.bottom];
+  var gap = typeof PACK_GAP_POINT === 'number' ? PACK_GAP_POINT : 0;
+  for (var i = 0; obstacles && i < obstacles.length; i += 1) {
+    var obstacle = obstacles[i];
+    if (!obstacle) continue;
+    xCandidates.push(obstacle.right + gap);
+    yCandidates.push(obstacle.top + gap);
+  }
+  for (var sizeIndex = 0; sizeIndex < sizes.length; sizeIndex += 1) {
+    var size = sizes[sizeIndex];
+    if (size.width > templateBounds.right - templateBounds.left + 1.5 || size.height > templateBounds.top - templateBounds.bottom + 1.5) continue;
+    for (var xIndex = 0; xIndex < xCandidates.length; xIndex += 1) {
+      var left = xCandidates[xIndex];
+      if (left + size.width > templateBounds.right + 1.5) continue;
+      for (var yIndex = 0; yIndex < yCandidates.length; yIndex += 1) {
+        var bottom = yCandidates[yIndex];
+        var candidate = { left: left, right: left + size.width, bottom: bottom, top: bottom + size.height, width: size.width, height: size.height };
+        if (candidate.top > templateBounds.top + 1.5) continue;
+        if (!obstacles || !collidesOrTooClose(candidate, obstacles)) return true;
+      }
+    }
+  }
+  return false;
 }
 
 
@@ -3669,10 +3743,24 @@ function packImagesOnSheet(parentLayer, documentRef) {
   var borderCollisionIndex = packContext.borderCollisionIndex;
   var packArea = packContext.packArea;
   var templateBounds = packContext.templateBounds;
+  addReport('PACK_AREA: ' + packArea.source + ' | left=' + Math.round(templateBounds.left) + ' | top=' + Math.round(templateBounds.top) + ' | right=' + Math.round(templateBounds.right) + ' | bottom=' + Math.round(templateBounds.bottom));
   var lazerOutline = findNamedPageItem(parentLayer, lazerOutlineName());
   if (lazerOutline === null) return;
 
-  var bestPlacement = chooseBestPlacementForItem(lazerOutline, templateBounds, borderObstacles, borderPolygons, borderCollisionIndex);
+  var quickFitAvailable = quickRectangularFit(lazerOutline, templateBounds, borderObstacles);
+  if (!quickFitAvailable) {
+    if (typeof CODEX_FAST_NO_FIT !== 'undefined' && CODEX_FAST_NO_FIT === true) {
+      try { wholeImagesGroup.remove(); } catch (error) {}
+      addReport('QUICK_NO_FIT: khong con free-space du kich thuoc; bo qua item va chuyen size nho hon.');
+      if (!(typeof CODEX_BATCH_ITEMS !== 'undefined' && CODEX_BATCH_ITEMS && CODEX_BATCH_ITEMS.length)) writeRunResult(false, false, 'NO_FIT_CURRENT_SHEET');
+      throw new Error('NO_FIT_CURRENT_SHEET');
+    }
+    addReport('QUICK_FIT_HINT: khong thay o chu nhat de dat nhanh; tiep tuc kiem tra Border chinh xac.');
+  }
+
+  var bestPlacement = quickFitAvailable
+    ? chooseBestPlacementForItem(lazerOutline, templateBounds, borderObstacles, borderPolygons, borderCollisionIndex, packContext.freeRects)
+    : null;
   if (bestPlacement === null && borderPolygons.length > 0) bestPlacement = chooseBestPlacementPolygonFallback(lazerOutline, templateBounds, borderPolygons, borderCollisionIndex);
   if (bestPlacement === null) {
     try { wholeImagesGroup.remove(); } catch (error) {}
@@ -3857,6 +3945,7 @@ function removeDebugLazer(parentLayer) {
 }
 
 function cleanupFailedItemArtifacts(documentRef, parentLayer) {
+  resetSharedSourceImport();
   var labels = ['lazer', 'front', 'back'];
   for (var i = 0; i < labels.length; i += 1) {
     var label = labels[i];
@@ -4049,9 +4138,33 @@ function finalMoveItemsToOutputLayers(documentRef, parentLayer) {
     var lazerNamesUpdated = normalizeLazerOutputNames(lazerLayer);
     if (lazerNamesUpdated > 0) addReport('ERROR mode LAZER clipping/name cleanup: ' + lazerNamesUpdated + ' item(s); removed MASK_FROM_ naming.');
   }
+  // The shared raster only feeds the three temporary case layers; never leave it outside the artboard.
+  resetSharedSourceImport();
+  removeOrphanedSharedSourceImports(parentLayer);
   addReport('QTY sequential item: ' + (typeof CODEX_QTY_INDEX !== 'undefined' ? CODEX_QTY_INDEX : 1) + '/' + (typeof CODEX_ITEM_QTY !== 'undefined' ? CODEX_ITEM_QTY : 1));
   assertNoTempPackArtifacts(parentLayer);
 
+}
+
+function duplicateCompletedAcrylicSet(documentRef, parentLayer, sourceNames, targetSuffix) {
+  CODEX_ITEM_RUN_SUFFIX = targetSuffix;
+  var copies = [
+    { layer: 'BORDER', source: sourceNames.border, target: lazerOutlineName() },
+    { layer: 'LAZER', source: sourceNames.lazer, target: caseLayerName('lazer') },
+    { layer: 'FRONT', source: sourceNames.front, target: caseLayerName('front') }
+  ];
+  if (CODEX_SIDE_COUNT >= 2) copies.push({ layer: 'BACK', source: sourceNames.back, target: caseLayerName('back') });
+  for (var copyIndex = 0; copyIndex < copies.length; copyIndex += 1) {
+    var part = copies[copyIndex];
+    var sourceLayer = ensureLayer(documentRef, part.layer);
+    var sourceItem = findNamedPageItem(sourceLayer, part.source);
+    if (sourceItem === null) throw new Error('QTY_SOURCE_MISSING: ' + part.layer + ' | ' + part.source);
+    var duplicate = sourceItem.duplicate(parentLayer, ElementPlacement.PLACEATBEGINNING);
+    duplicate.name = part.target;
+  }
+  packImagesOnSheet(parentLayer, documentRef);
+  finalMoveItemsToOutputLayers(documentRef, parentLayer);
+  addCurrentBorderToPackContext(documentRef);
 }
 
 function cross(o, a, b) {
@@ -4467,6 +4580,7 @@ function runBatch() {
   var results = [];
   var noFitCountBySize = {};
   var blockedSizeKeys = {};
+  var completedArtworkByJobKey = {};
   try {
     if (typeof CODEX_BLOCKED_SIZE_KEYS !== 'undefined' && CODEX_BLOCKED_SIZE_KEYS) {
       for (var initialSizeIndex = 0; initialSizeIndex < CODEX_BLOCKED_SIZE_KEYS.length; initialSizeIndex += 1) {
@@ -4505,6 +4619,14 @@ function runBatch() {
       continue;
     }
     try {
+      var cachedArtwork = completedArtworkByJobKey[item.jobKey];
+      if (cachedArtwork) {
+        writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'DUPLICATE_SET', item, 'Copy LAZER/FRONT/BACK/BORDER');
+        duplicateCompletedAcrylicSet(documentRef, parentLayer, cachedArtwork, item.runSuffix);
+        results.push({ success: true, fit: true, message: 'OK_DUPLICATED' });
+        writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'DONE', item, 'OK_DUPLICATED');
+        continue;
+      }
       writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'TRACE_LAZER', item, '');
       runCase(documentRef, parentLayer, 'lazer', 'top', 0, 0);
       writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'LAZER_READY', item, '');
@@ -4569,6 +4691,12 @@ function runBatch() {
       else releaseLazerClipMaskForOutput(parentLayer);
       finalMoveItemsToOutputLayers(documentRef, parentLayer);
       addCurrentBorderToPackContext(documentRef);
+      completedArtworkByJobKey[item.jobKey] = {
+        border: lazerOutlineName(),
+        lazer: caseLayerName('lazer'),
+        front: caseLayerName('front'),
+        back: caseLayerName('back')
+      };
       results.push({ success: true, fit: true, message: 'OK' });
       writeProgress(i + 1, CODEX_BATCH_ITEMS.length, 'DONE', item, 'OK');
       if (shouldProgressRedraw(i + 1)) { try { app.redraw(); } catch (redrawError) {} }

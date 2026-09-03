@@ -1,7 +1,7 @@
 param([string]$Root = 'D:\FFACTORY\Arcylic')
 $ErrorActionPreference = 'Stop'
 $assetRoot = Split-Path -Parent $PSScriptRoot
-$setupVersion = '2026-08-22.1'
+$setupVersion = '2026-08-30.1'
 $runtime = Join-Path $Root '.runtime'
 $resultPath = Join-Path $runtime 'machine-setup.json'
 New-Item -ItemType Directory -Force -Path $runtime | Out-Null
@@ -29,6 +29,27 @@ try {
     $templateTarget = Join-Path $Root 'template'
     if (Test-Path -LiteralPath $templateSource) { Get-ChildItem -LiteralPath $templateSource -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $templateTarget $_.Name) -Force } }
   }
+  Step 'Sao chép template Sticker Vinyl mặc định' {
+    $stickerSource = Join-Path $assetRoot 'app-assets\templates\sticker-vinyl'
+    $stickerTarget = Join-Path $Root 'Sticker Vinyl\template'
+    New-Item -ItemType Directory -Force -Path $stickerTarget | Out-Null
+    if (Test-Path -LiteralPath $stickerSource) { Get-ChildItem -LiteralPath $stickerSource -File | ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $stickerTarget $_.Name) -Force } }
+  }
+  Step 'Nạp Action Sticker Vinyl vào Illustrator' {
+    $actionSource = Join-Path $assetRoot 'app-assets\actions\My set.aia'
+    $actionRuntime = Join-Path $runtime 'install-sticker-actions.runtime.jsx'
+    $actionResult = Join-Path $runtime 'install-sticker-actions.result.json'
+    $actionScript = Join-Path $assetRoot 'Tool\scripts\install-sticker-actions.jsx'
+    $launchScript = Join-Path $assetRoot 'Tool\scripts\launch-illustrator-and-run.vbs'
+    if (-not (Test-Path -LiteralPath $actionSource)) { throw "Không tìm thấy Action Sticker: $actionSource" }
+    $source = Get-Content -LiteralPath $actionScript -Raw -Encoding UTF8
+    $actionPathJson = ($actionSource -replace '\\','/') | ConvertTo-Json -Compress
+    $resultPathJson = ($actionResult -replace '\\','/') | ConvertTo-Json -Compress
+    $prefix = "var CODEX_STICKER_ACTION_PATH = $actionPathJson;`nvar CODEX_STICKER_ACTION_RESULT_PATH = $resultPathJson;`n"
+    Set-Content -LiteralPath $actionRuntime -Value ($prefix + $source) -Encoding UTF8
+    & cscript.exe //nologo $launchScript $actionRuntime
+    if ($LASTEXITCODE -ne 0) { throw "Không thể chạy Illustrator để nạp Action (mã $LASTEXITCODE)." }
+  }
   Step 'Kiểm tra hoặc cài Node.js' {
     if (-not (Get-Command node -ErrorAction SilentlyContinue)) { if (Get-Command winget -ErrorAction SilentlyContinue) { winget install OpenJS.NodeJS.LTS --silent --accept-package-agreements --accept-source-agreements } else { throw 'Thiếu Node.js và máy không có winget.' } }
     node --version
@@ -48,4 +69,3 @@ try {
   $payload = [pscustomobject]@{ status = 'error'; setupVersion = $setupVersion; updatedAt = (Get-Date).ToString('o'); message = $_.Exception.Message; steps = $steps; illustratorInstalled = $false }
 }
 $payload | ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $resultPath -Encoding UTF8
-

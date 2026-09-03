@@ -1,5 +1,5 @@
 import type { AgentSnapshot, FolderFileEntry, RunnerStatus } from '@acrylic/contracts';
-import { apiBase, demoMode, fileDate, fileSize, fileTime, parseFileIdentity, parseItemName, parseSizeInch, readJson, sortLikeTool, vietnamTime } from './client';
+import { apiBase, demoMode, fileDate, fileSize, fileTime, isStickerProduct, parseFileIdentity, parseItemName, parseSizeInch, readJson, sortLikeTool, vietnamTime } from './client';
 import { mockData } from './mock';
 import type { DashboardData, DashboardSummary, DoneItem, ErrorItem, OutputGroup, QueueItem, RunHistory, SettingsView, SheetView, SideMode, WaitFile, WaitItem } from './types';
 
@@ -34,7 +34,8 @@ function waitCapOf(name: string): number {
 }
 
 function activeWaitFile(waitFiles: FolderFileEntry[]) {
-  const aiWaits = waitFiles.filter((file) => /wait_\d+(?:-\d+)?\.ai$/i.test(file.name));
+  const aiWaits = waitFiles.filter((file) => isStickerProduct ? /_wait_[\d_]+\.ai$/i.test(file.name) : /wait_\d+(?:-\d+)?\.ai$/i.test(file.name));
+  if (isStickerProduct) return aiWaits.sort((a, b) => new Date(b.modifiedAt ?? 0).getTime() - new Date(a.modifiedAt ?? 0).getTime())[0] ?? null;
   return aiWaits.sort((a, b) => waitCapOf(a.name) - waitCapOf(b.name))[0] ?? null;
 }
 
@@ -66,7 +67,7 @@ function mapWaitFile(file: FolderFileEntry, previewFiles: FolderFileEntry[] = []
     relativePath: file.relativePath ?? file.name,
     updatedAt: fileTime(file),
     modifiedAt: file.modifiedAt,
-    fitCapInch: Number(manifest?.fitCapInch ?? waitCapOf(file.name)),
+    fitCapInch: Number(manifest?.fitCapInch ?? (isStickerProduct ? 0 : waitCapOf(file.name))),
     savedAt: typeof manifest?.savedAt === 'string' ? manifest.savedAt : undefined,
     printedAt: typeof manifest?.printedAt === 'string' ? manifest.printedAt : undefined,
     items: itemList.length,
@@ -82,7 +83,7 @@ function mapQueue(files: FolderFileEntry[], summary: DashboardSummary, waitFiles
     const parsed = parseItemName(file.name);
     const identity = parseFileIdentity(file.name);
     const isCurrent = Boolean(runningBase) && file.name.toLowerCase().startsWith(runningBase);
-    const waitMismatch = waitCap !== null && parsed.sizeInch > waitCap + 0.0001;
+    const waitMismatch = !isStickerProduct && waitCap !== null && parsed.sizeInch > waitCap + 0.0001;
     return {
       id: file.path,
       priority: index + 1,
@@ -125,7 +126,7 @@ function mapSheet(summary: DashboardSummary, waitFiles: FolderFileEntry[], previ
     waitDecision: running ? (waitCap > WAIT_MIN_CAP_INCH ? 'Giữ wait' : 'Sẽ ra output') : 'Chưa chạy',
     currentWaitFile: activeWait?.name ?? '—',
     items: currentName ? [{ index: Number(summary.progress?.index ?? 1), fileName: currentName, turn: '—', sizeInch: parseSizeInch(currentName), rotation: '—', position: 'Đang chờ dữ liệu', status: 'running' }] : [],
-    waitFiles: waitFiles.filter((file) => /wait_\d/i.test(file.name)).sort((a, b) => waitCapOf(a.name) - waitCapOf(b.name)).map((file) => mapWaitFile(file, previewFiles)),
+    waitFiles: waitFiles.filter((file) => isStickerProduct ? /_wait_[\d_]+\.ai$/i.test(file.name) : /wait_\d+(?:-\d+)?\.ai$/i.test(file.name)).sort((a, b) => isStickerProduct ? new Date(b.modifiedAt ?? 0).getTime() - new Date(a.modifiedAt ?? 0).getTime() : waitCapOf(a.name) - waitCapOf(b.name)).map((file) => mapWaitFile(file, previewFiles)),
     beforePreviewLabel: activeWait?.name ? `Preview từ ${activeWait.name}` : 'Preview từ template mặc định',
     afterPreviewLabel: running ? 'EYE + BORDER từ sheet đã lưu gần nhất' : 'EYE + BORDER của wait/template hiện tại',
     beforePreviewUrl,

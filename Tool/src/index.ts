@@ -52,24 +52,27 @@ const CLOSE_DOCUMENT_AFTER_SAVE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CLO
 const SHOULD_STOP_AFTER_CHECKPOINT = CHECKPOINT_MODE !== "continue";
 const JSX_BATCH_SIZE = (CHECK_FULL_PIPELINE || PREVIEW_SORT_ONLY) ? 1 : Math.max(1, Math.min(CHECKPOINT_ITEM_LIMIT, Number(process.env.ACRYLIC_JSX_BATCH_SIZE ?? (IGNORE_CHECK_FALSE ? 18 : CHECKPOINT_ITEM_LIMIT))));
 const PACK_GAP_CM = Math.max(0, Number(process.env.ACRYLIC_PACK_GAP_CM ?? 0.2));
+const FAST_NO_FIT = /^(1|true|yes)$/i.test(process.env.ACRYLIC_FAST_NO_FIT ?? 'true');
 const UI_REDRAW_EVERY = Math.max(1, Number(process.env.ACRYLIC_UI_REDRAW_EVERY ?? 5));
 const WAIT_MIN_CAP_INCH = Number(process.env.ACRYLIC_WAIT_MIN_CAP_INCH ?? 3);
 const JSX_STALL_TIMEOUT_MS = Math.max(0, Number(process.env.ACRYLIC_ITEM_STALL_TIMEOUT_MS ?? (IGNORE_CHECK_FALSE ? 180000 : 0)));
 const coloredMetricsCache = new Map();
 const runtimeSourceCache = new Map();
 const placementMetricsCache = new Map();
+const approvedErrorLookupCache = new Map();
 function isApprovedErrorImage(imagePath) {
     const imageName = path.basename(imagePath);
+    if (approvedErrorLookupCache.has(imageName))
+        return approvedErrorLookupCache.get(imageName);
+    let isApproved = false;
     try {
         const approved = JSON.parse(readFileSync(approvedErrorsPath, 'utf8'));
-        if (approved && approved[imageName]) {
-            console.log('APPROVAL_LOOKUP: ' + imageName + ' | approved=true | marker=' + approvedErrorsPath);
-            return true;
-        }
+        isApproved = Boolean(approved && approved[imageName]);
     }
     catch { }
-    console.log('APPROVAL_LOOKUP: ' + imageName + ' | approved=false | marker=' + approvedErrorsPath);
-    return false;
+    approvedErrorLookupCache.set(imageName, isApproved);
+    console.log('APPROVAL_LOOKUP: ' + imageName + ' | approved=' + isApproved + ' | marker=' + approvedErrorsPath);
+    return isApproved;
 }
 function getDatedDoneDir(now = new Date()) {
     const monthDir = `thang${now.getMonth() + 1}`;
@@ -597,6 +600,7 @@ async function createRuntimeJsx(jsxTemplatePath, selectedImagePath, coloredMetri
         `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
         `var CODEX_BYPASS_CHECKS = ${JSON.stringify(BYPASS_CHECKS)};`,
         `var CODEX_PACK_GAP_CM = ${JSON.stringify(PACK_GAP_CM)};`,
+        `var CODEX_FAST_NO_FIT = ${JSON.stringify(FAST_NO_FIT)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
         `var CODEX_CHECK_IMAGE_SIZE_ENABLED = ${JSON.stringify(CHECK_IMAGE_SIZE_ENABLED)};`,
@@ -730,6 +734,7 @@ async function createBatchRuntimeJsx(jsxTemplatePath, openTemplatePath, batchIte
         `var CODEX_PREVIEW_SORT_ONLY = ${JSON.stringify(PREVIEW_SORT_ONLY)};`,
         `var CODEX_BYPASS_CHECKS = ${JSON.stringify(BYPASS_CHECKS)};`,
         `var CODEX_PACK_GAP_CM = ${JSON.stringify(PACK_GAP_CM)};`,
+        `var CODEX_FAST_NO_FIT = ${JSON.stringify(FAST_NO_FIT)};`,
         `var CODEX_USE_CHECK_MEASUREMENT = ${JSON.stringify(USE_CHECK_MEASUREMENT)};`,
         `var CODEX_IGNORE_CHECK_FALSE = ${JSON.stringify(IGNORE_CHECK_FALSE)};`,
         `var CODEX_CHECK_IMAGE_SIZE_ENABLED = ${JSON.stringify(CHECK_IMAGE_SIZE_ENABLED)};`,
@@ -769,13 +774,15 @@ async function normalizeLegacyWaitAiFiles() {
 async function getWaitAiFile() {
     try {
         const entries = await readdir(waitDir, { withFileTypes: true });
-        const aiEntries = entries
+        const aiEntries = await Promise.all(entries
             .filter((entry) => entry.isFile() && waitAiFileNamePattern.test(entry.name))
-            .map((entry) => entry.name)
-            .sort((left, right) => left.localeCompare(right, 'en', { numeric: true }));
+            .map(async (entry) => ({ name: entry.name, modifiedAt: (await stat(path.join(waitDir, entry.name))).mtimeMs })));
         if (aiEntries.length === 0)
             return null;
-        const name = aiEntries[0];
+        aiEntries.sort((left, right) => right.modifiedAt - left.modifiedAt || left.name.localeCompare(right.name, 'en', { numeric: true }));
+        if (aiEntries.length > 1)
+            console.log('Multiple wait AI files found; using newest: ' + aiEntries[0].name);
+        const name = aiEntries[0].name;
         const match = name.match(waitAiFileNamePattern);
         const cap = match ? Number(match[1].replace('-', '.')) : null;
         return { filePath: path.join(waitDir, name), cap };
@@ -1251,7 +1258,7 @@ async function main() {
                 const batchUnits = [];
                 const batchLimit = Math.min(JSX_BATCH_SIZE, capacityLeft);
                 let nextUnitIndex = unitIndex;
-                while (nextUnitIndex < runUnits.length && batchUnits.length < batchLimit) {
+                while (nextUnitIndex < runUnits.length && (batchUnits.length < batchLimit || (batchUnits.length > 0 && runUnits[nextUnitIndex].job.imagePath === batchUnits[batchUnits.length - 1].job.imagePath))) {
                     const candidate = runUnits[nextUnitIndex];
                     nextUnitIndex += 1;
                     if (errorMovedPaths.has(candidate.job.imagePath)) {

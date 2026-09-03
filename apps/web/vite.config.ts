@@ -36,7 +36,7 @@ function fixVietnameseMojibake(value: unknown): unknown {
 }
 
 type RunnerStatus = 'idle' | 'running' | 'error';
-type ToolCommand = 'start' | 'all' | 'check' | 'test';
+type ToolCommand = 'start' | 'all' | 'check' | 'test' | 'sticker';
 type ExportAssetKind = 'front' | 'back' | 'lazer';
 type RunKind = 'tool' | 'export' | 'setup';
 type ToolStep = { index: number; total: number; step: string; fileName: string; status: 'running' | 'success' | 'error'; message: string };
@@ -58,13 +58,14 @@ type Snapshot = {
 
 const factoryRoot = process.env.ACRYLIC_FACTORY_ROOT ?? 'D:/FFACTORY/Arcylic';
 const appRoot = process.env.ACRYLIC_APP_ROOT ?? factoryRoot;
-const currentSetupVersion = '2026-08-22.1';
+const currentSetupVersion = '2026-08-30.1';
 const toolDir = path.join(appRoot, 'Tool');
 const toolStatePath = path.join(factoryRoot, '.runtime', 'tool-ui-state.json');
 const operationRuntimeDir = path.join(factoryRoot, '.runtime', 'operations');
 const operationRunnerPath = path.join(appRoot, 'scripts', 'tool-operation-runner.mjs');
 const thumbnailCacheDir = path.join(factoryRoot, '.runtime', 'thumb-cache');
 const folderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings.json');
+const holoFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-holo.json');
 const checkSettingsPath = path.join(factoryRoot, '.runtime', 'check-settings.json');
 const defaultFolderPaths: Record<string, string> = {
   Images: path.join(factoryRoot, 'Images'),
@@ -78,12 +79,52 @@ const defaultFolderPaths: Record<string, string> = {
   output_lazer: path.join(factoryRoot, 'output_lazer'),
   template: path.join(factoryRoot, 'template'),
 };
-function loadFolderPaths(): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsPath, 'utf8')) as Record<string, string>; return { ...defaultFolderPaths, ...saved }; } catch { return { ...defaultFolderPaths }; } }
-function saveFolderPaths(next: Record<string, string>) { mkdirSync(path.dirname(folderSettingsPath), { recursive: true }); writeFileSync(folderSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
+const defaultHoloFolderPaths: Record<string, string> = {
+  Images: path.join(factoryRoot, 'images_holo'),
+  images_error: path.join(factoryRoot, 'images_holo_error'),
+  images_processed: path.join(factoryRoot, 'images_holo_processed'),
+  imgaes_done: path.join(factoryRoot, 'images_holo_done'),
+  wait: path.join(factoryRoot, 'wait_holo'),
+  output_ai: path.join(factoryRoot, 'output_holo_ai'),
+  output_front: path.join(factoryRoot, 'output_holo_front'),
+  output_back: path.join(factoryRoot, 'output_holo_back'),
+  output_lazer: path.join(factoryRoot, 'output_holo_lazer'),
+  // Holo uses the same Illustrator templates and processing logic as Acrylic.
+  // Only its input, wait, error, done, and output folders are isolated.
+  template: path.join(factoryRoot, 'template'),
+};
+const externalStickerRoot = path.join(factoryRoot, '..', 'Sticker Vinyl');
+const bundledStickerRoot = path.join(factoryRoot, 'Sticker Vinyl');
+const stickerRoot = existsSync(externalStickerRoot) ? externalStickerRoot : bundledStickerRoot;
+const defaultStickerFolderPaths: Record<string, string> = {
+  Images: path.join(stickerRoot, 'Sticker'),
+  images_error: path.join(stickerRoot, 'image-error'),
+  images_processed: path.join(stickerRoot, 'image-processed'),
+  imgaes_done: path.join(stickerRoot, 'image-done'),
+  wait: path.join(stickerRoot, 'template', 'wait'),
+  output_ai: path.join(stickerRoot, 'template', 'output_ai'),
+  output_front: path.join(stickerRoot, 'template', 'output_front'),
+  output_back: path.join(stickerRoot, 'template', 'output_back'),
+  output_lazer: path.join(stickerRoot, 'template', 'output_lazer'),
+  template: path.join(stickerRoot, 'template'),
+  wait_meta: path.join(stickerRoot, 'template', 'wait-meta'),
+  note_done: path.join(stickerRoot, 'template', 'note_done'),
+  note_work: path.join(stickerRoot, 'template', 'note_work'),
+};
+const stickerFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-sticker.json');
+const stickerSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-settings.json');
+function folderSettingsFile(product = 'acrylic') { return product === 'holo' ? holoFolderSettingsPath : product === 'sticker' ? stickerFolderSettingsPath : folderSettingsPath; }
+function defaultPathsFor(product = 'acrylic') { return product === 'holo' ? defaultHoloFolderPaths : product === 'sticker' ? defaultStickerFolderPaths : defaultFolderPaths; }
+function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; return { ...defaultPathsFor(product), ...saved }; } catch { return { ...defaultPathsFor(product) }; } }
+function saveFolderPaths(next: Record<string, string>, product = 'acrylic') { const settingsPath = folderSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 type CheckSettings = { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number; jsxBatchSize: number; itemGapCm: number };
+type StickerSettings = { marginMm: number; gapMm: number };
 const defaultCheckSettings: CheckSettings = { checkImageSize: true, checkTwoSideFaceOffset: false, faceToleranceCm: 0.034, cutToleranceCm: 0.05, jsxBatchSize: 2, itemGapCm: 0.2 };
+const defaultStickerSettings: StickerSettings = { marginMm: 3, gapMm: 5 };
 function loadCheckSettings(): CheckSettings { try { const saved = JSON.parse(readFileSync(checkSettingsPath, 'utf8')) as Partial<CheckSettings>; return { ...defaultCheckSettings, ...saved }; } catch { return { ...defaultCheckSettings }; } }
 function saveCheckSettings(next: CheckSettings) { mkdirSync(path.dirname(checkSettingsPath), { recursive: true }); writeFileSync(checkSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
+function loadStickerSettings(): StickerSettings { try { return { ...defaultStickerSettings, ...JSON.parse(readFileSync(stickerSettingsPath, 'utf8')) }; } catch { return { ...defaultStickerSettings }; } }
+function saveStickerSettings(next: StickerSettings) { mkdirSync(path.dirname(stickerSettingsPath), { recursive: true }); writeFileSync(stickerSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 function isUncPath(value: string) { return /^\\\\[^\\]+\\[^\\]+/.test(value.trim()); }
 function mappedDriveOf(value: string) { return value.trim().match(/^([A-Za-z]:)(?:[\\/]|$)/)?.[1].toUpperCase(); }
 function normalizePathSlashes(value: string) { return value.trim().replace(/[\\/]+/g, path.sep); }
@@ -116,6 +157,9 @@ function normalizeFolderPath(inputPath: string): NormalizedFolderPath {
   if (isUncPath(trimmed)) return { inputPath, normalizedPath: trimmed, network: true, uncResolved: true };
   const mappedDrive = mappedDriveOf(trimmed);
   if (!mappedDrive) return { inputPath, normalizedPath: normalizePathSlashes(trimmed), network: false, uncResolved: false };
+  // The factory workspace drive is local. Do not run slow SMB discovery for it
+  // every time the dashboard refreshes its folders.
+  if (mappedDrive === mappedDriveOf(factoryRoot)) return { inputPath, normalizedPath: normalizePathSlashes(trimmed), network: false, mappedDrive, uncResolved: false };
   const remote = resolveMappedDriveRemote(mappedDrive);
   // A drive letter without a NAS mapping is a normal local Windows drive.
   if (!remote) return { inputPath, normalizedPath: normalizePathSlashes(trimmed), network: false, uncResolved: false };
@@ -147,6 +191,14 @@ function normalizeSavedFolderPaths(paths: Record<string, string>) {
 }
 const initialFolderNormalization = normalizeSavedFolderPaths(loadFolderPaths());
 let folderPaths = initialFolderNormalization.normalizedPaths;
+let activeProduct = 'acrylic';
+function activateProduct(product: string) {
+  activeProduct = product === 'holo' || product === 'sticker' ? product : 'acrylic';
+  const normalized = normalizeSavedFolderPaths(loadFolderPaths(activeProduct));
+  folderPaths = normalized.normalizedPaths;
+  folderPathWarnings = normalized.warnings;
+  if (normalized.changed) saveFolderPaths(folderPaths, activeProduct);
+}
 let folderPathWarnings: Record<string, string> = initialFolderNormalization.warnings;
 if (initialFolderNormalization.changed) saveFolderPaths(folderPaths);
 let checkSettings = loadCheckSettings();
@@ -519,6 +571,42 @@ function buildOutputAiCopyTarget(waitFileName: string) {
   }
 }
 
+function buildStickerOutputTarget() {
+  const now = new Date();
+  const day = now.getDate();
+  const month = now.getMonth() + 1;
+  const year = String(now.getFullYear()).slice(-2);
+  const folder = path.join(folderPaths.output_ai, `thang${month}`, `${day}-${month}-${year}`);
+  mkdirSync(folder, { recursive: true });
+  let index = 1;
+  while (true) {
+    const fileName = `sticker_${String(index).padStart(2, '0')}.ai`;
+    const filePath = path.join(folder, fileName);
+    if (!existsSync(filePath)) return { filePath, relativePath: path.relative(folderPaths.output_ai, filePath) };
+    index += 1;
+  }
+}
+
+function moveStickerWaitToOutput(waitRelativePath: string) {
+  if (activeRun?.status === 'running') return { ok: false, message: 'Tool hoặc Export đang chạy.', run: activeRun };
+  const source = resolveWaitAiPath(waitRelativePath);
+  const target = buildStickerOutputTarget();
+  try {
+    renameSync(source, target.filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EXDEV') throw error;
+    fs.copyFileSync(source, target.filePath);
+    fs.rmSync(source);
+  }
+  for (const suffix of ['.manifest.json', '.json', '.txt']) {
+    const sidecar = source.replace(/\.ai$/i, suffix);
+    try { if (existsSync(sidecar)) fs.rmSync(sidecar, { force: true }); } catch {}
+  }
+  cachedSnapshot = null;
+  cacheExpiresAt = 0;
+  return { ok: true, message: `Đã chuyển file Sticker vào output AI: ${target.relativePath}`, outputAiRelativePath: target.relativePath };
+}
+
 function copyWaitToOutputAndExport(waitRelativePath: string, assets: ExportAssetKind[]) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Tool hoặc Export đang chạy.', run: activeRun };
   const source = resolveWaitAiPath(waitRelativePath);
@@ -556,13 +644,25 @@ function runExport(outputAiRelativePath: string, assets: ExportAssetKind[]) {
 
 function runTool(command: ToolCommand) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
+  if (command === 'sticker') {
+    const stickerRuntimePath = path.join(toolDir, '.runtime', 'sticker-vinyl-runtime.jsx');
+    mkdirSync(path.dirname(stickerRuntimePath), { recursive: true });
+    const stickerPaths = { root: path.join(stickerRoot), template: folderPaths.template, images: folderPaths.Images, done: folderPaths.imgaes_done, error: folderPaths.images_error, wait: folderPaths.wait, waitMeta: folderPaths.wait_meta, noteDone: folderPaths.note_done, noteWork: folderPaths.note_work };
+    const source = readFileSync(path.join(toolDir, 'scripts', 'sticker-vinyl.jsx'), 'utf8');
+    const stickerSettings = loadStickerSettings();
+    const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};`;
+    writeFileSync(stickerRuntimePath, prefix + '\n' + source, 'utf8');
+    const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: sticker'] };
+    launchPersistentOperation(run, 'cscript.exe', ['//nologo', path.join(toolDir, 'scripts', 'launch-illustrator-and-run.vbs'), stickerRuntimePath], { ACRYLIC_STICKER_MODE: '1' });
+    return { ok: true, message: 'Đã chạy Tool Sticker Vinyl.', run: activeRun };
+  }
   const commandEnv: Record<string, string> = command === 'check'
     ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '1', ACRYLIC_CHECKPOINT_MODE: 'stop', ACRYLIC_JSX_BATCH_SIZE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '0' }
     : command === 'test'
       ? { ACRYLIC_TEST_IMPORT_ONE_IMAGE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
       : command === 'all'
         ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
-        : { ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
+      : { ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_FAST_NO_FIT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
   const executablePath = command === 'test' ? path.join(toolDir, 'dist-bundle', 'test-import-one-image.cjs') : path.join(toolDir, 'dist-bundle', 'index.cjs');  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
   launchPersistentOperation(run, 'node', [executablePath], commandEnv);
   return { ok: true, message: 'Đã chạy Tool ' + command + '.', run: activeRun };
@@ -585,8 +685,13 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
       if (!entry.isFile() || entry.name === '.error-metadata.json' || lowerName.endsWith('.manifest.json') || lowerName === 'thumbs.db' || lowerName === 'desktop.ini' || lowerName === '.ds_store' || lowerName.startsWith('~') || lowerName.endsWith('.tmp') || lowerName.endsWith('.bak') || lowerName.endsWith('.lock')) continue;
       const rootKey = Object.entries(folderPaths).find(([, folder]) => path.resolve(folder).toLowerCase() === path.resolve(root).toLowerCase())?.[0];
       const extension = path.extname(entry.name).toLowerCase();
-      if ((rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed') && extension !== '.png') continue;
-      if (rootKey === 'output_ai' && (extension !== '.ai' || !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name))) continue;
+      if (activeProduct === 'sticker' && (rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed')) {
+        if (!['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.psd'].includes(extension)) continue;
+      } else if ((rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed') && extension !== '.png') continue;
+      // Illustrator writes this temporary file while Save As is in progress.
+      // It is not a usable wait sheet and must never appear in the queue.
+      if (rootKey === 'wait' && (extension !== '.ai' || lowerName.endsWith('.saving.ai') || (activeProduct === 'sticker' ? !/_wait_/i.test(entry.name) : !/^wait_\d+(?:-\d+)?\.ai$/i.test(entry.name)))) continue;
+      if (rootKey === 'output_ai' && (extension !== '.ai' || (activeProduct !== 'sticker' && !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
       if (rootKey === 'output_front' && (extension !== '.png' || !/_front\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_back' && (extension !== '.png' || !/_back\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_lazer' && (extension !== '.ai' || !/_lazer\.ai$/i.test(entry.name))) continue;
@@ -617,10 +722,10 @@ async function snapshot(force = false): Promise<Snapshot> {
   if (!force && cachedSnapshot && Date.now() < cacheExpiresAt) return cachedSnapshot;
   if (snapshotPromise) return snapshotPromise;
   snapshotPromise = (async () => {
-    const normalizedLoaded = normalizeSavedFolderPaths(loadFolderPaths());
+    const normalizedLoaded = normalizeSavedFolderPaths(loadFolderPaths(activeProduct));
     folderPaths = normalizedLoaded.normalizedPaths;
     folderPathWarnings = normalizedLoaded.warnings;
-    if (normalizedLoaded.changed) saveFolderPaths(folderPaths);
+    if (normalizedLoaded.changed) saveFolderPaths(folderPaths, activeProduct);
     const folderHealth = Object.fromEntries(Object.entries(folderPaths).map(([key, folder]) => [key, canAccessFolder(folder)]));
     for (const [key, health] of Object.entries(folderHealth)) if (health.warning) folderPathWarnings[key] = health.warning;
     const entries = await Promise.all(Object.entries(folderPaths).map(async ([key, folder]) => [key, await scanFolder(folder)] as const));
@@ -845,6 +950,10 @@ function localFilesystemApi(): Plugin {
       server.middlewares.use(async (request, response, next) => {
         const url = new URL(request.url ?? '/', 'http://localhost');
         if (!url.pathname.startsWith('/api/v1/')) return next();
+        const productMatch = url.pathname.match(/^\/api\/v1\/(holo|sticker)\//);
+        const product = productMatch?.[1] ?? 'acrylic';
+        if (productMatch) url.pathname = url.pathname.replace(`/api/v1/${product}/`, '/api/v1/');
+        activateProduct(product);
         if (serveThumbnail(url, response)) return;
         if (serveFile(url, response)) return;
         if (url.pathname === '/api/v1/wait-preview') {
@@ -894,7 +1003,9 @@ function localFilesystemApi(): Plugin {
               const waitRelativePath = String(payload.waitRelativePath ?? '');
               const assets = Array.isArray(payload.assets) ? payload.assets.filter((item: unknown) => ['front', 'back', 'lazer'].includes(String(item))) as ExportAssetKind[] : [];
               if (!waitRelativePath) return json(response, { ok: false, message: 'Thiếu file wait để export.', run: toolStatus().run }, 400);
-              return json(response, copyWaitToOutputAndExport(waitRelativePath, assets));
+              return json(response, activeProduct === 'sticker'
+                ? moveStickerWaitToOutput(waitRelativePath)
+                : copyWaitToOutputAndExport(waitRelativePath, assets));
             } catch (error) {
               return json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể export file wait.', run: toolStatus().run }, 400);
             }
@@ -1011,6 +1122,11 @@ function localFilesystemApi(): Plugin {
         if (url.pathname === '/api/v1/wait') return json(response, current.folders.wait);
         if (url.pathname === '/api/v1/outputs') return json(response, { ai: current.folders.output_ai, front: current.folders.output_front, back: current.folders.output_back, lazer: current.folders.output_lazer });
         if (url.pathname === '/api/v1/settings/folders') return json(response, { folderPaths, folderPathWarnings, checkSettings });
+        if (url.pathname === '/api/v1/settings/sticker') {
+          if (request.method === 'GET') return json(response, { stickerSettings: loadStickerSettings() });
+          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as Partial<StickerSettings>; const next = { marginMm: Math.max(0, Number(parsed.marginMm ?? 3)), gapMm: Math.max(0, Number(parsed.gapMm ?? 5)) }; saveStickerSettings(next); return json(response, { ok: true, stickerSettings: next }); } catch { return json(response, { ok: false, message: 'Không thể lưu cấu hình Sticker.' }, 400); } });
+          return;
+        }
         if (url.pathname === '/api/v1/settings/checks/save') {
           let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => {
             try {
@@ -1046,7 +1162,7 @@ function localFilesystemApi(): Plugin {
               if (parsed.moveData !== false) {
                 for (const key of Object.keys(submittedPaths)) { const oldPath = folderPaths[key]; const newPath = submittedPaths[key]; if (oldPath && newPath && path.resolve(oldPath) !== path.resolve(newPath)) moveFolderContents(oldPath, newPath); }
               }
-              folderPaths = nextPaths; folderPathWarnings = {}; cachedSnapshot = null; saveFolderPaths(folderPaths); return json(response, { ok:true, folderPaths, normalizedPaths, warnings, moveData: parsed.moveData !== false });
+              folderPaths = nextPaths; folderPathWarnings = {}; cachedSnapshot = null; saveFolderPaths(folderPaths, activeProduct); return json(response, { ok:true, folderPaths, normalizedPaths, warnings, moveData: parsed.moveData !== false });
             } catch (error) { return json(response, { ok:false, message: error instanceof Error ? error.message : 'SAVE_FAILED' }, 400); }
           }); return; }
         next();

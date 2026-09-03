@@ -1,6 +1,8 @@
 import type { FolderFileEntry } from './types';
 
-export const apiBase = import.meta.env.VITE_ACRYLIC_API_BASE ?? '/api/v1';
+const isHoloProduct = window.location.pathname === '/holo' || window.location.pathname.startsWith('/holo/');
+export const isStickerProduct = window.location.pathname === '/sticker' || window.location.pathname.startsWith('/sticker/');
+export const apiBase = import.meta.env.VITE_ACRYLIC_API_BASE ?? (isHoloProduct ? '/api/v1/holo' : isStickerProduct ? '/api/v1/sticker' : '/api/v1');
 export const demoMode = String(import.meta.env.VITE_DEMO_MODE ?? '').toLowerCase() === 'true';
 const vietnamTimeZone = 'Asia/Ho_Chi_Minh';
 

@@ -79,6 +79,24 @@ function DashboardRoutes() {
       <Route path="/outputs" element={<OutputsPage data={data} />} />
       <Route path="/history" element={<HistoryPage data={data} />} />
       <Route path="/settings" element={<SettingsPage data={data} />} />
+      <Route path="/holo" element={<OverviewPage data={data} />} />
+      <Route path="/holo/queue" element={<QueuePage data={data} />} />
+      <Route path="/holo/tool" element={<ToolPage />} />
+      <Route path="/holo/done" element={<DonePage data={data} />} />
+      <Route path="/holo/processed" element={<ProcessedPage data={data} />} />
+      <Route path="/holo/errors" element={<ErrorsPage data={data} />} />
+      <Route path="/holo/outputs" element={<OutputsPage data={data} />} />
+      <Route path="/holo/history" element={<HistoryPage data={data} />} />
+      <Route path="/holo/settings" element={<SettingsPage data={data} />} />
+      <Route path="/sticker" element={<OverviewPage data={data} />} />
+      <Route path="/sticker/queue" element={<QueuePage data={data} />} />
+      <Route path="/sticker/tool" element={<ToolPage />} />
+      <Route path="/sticker/done" element={<DonePage data={data} />} />
+      <Route path="/sticker/processed" element={<ProcessedPage data={data} />} />
+      <Route path="/sticker/errors" element={<ErrorsPage data={data} />} />
+      <Route path="/sticker/outputs" element={<OutputsPage data={data} />} />
+      <Route path="/sticker/history" element={<HistoryPage data={data} />} />
+      <Route path="/sticker/settings" element={<SettingsPage data={data} />} />
       <Route path="*" element={<OverviewPage data={data} />} />
     </Routes>
   </AppShell></>;

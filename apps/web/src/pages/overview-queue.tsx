@@ -54,6 +54,7 @@ export function OverviewPage({ data }: { data: DashboardData }) {
 }
 
 export function QueuePage({ data }: { data: DashboardData }) {
+  const isSticker = apiBase.endsWith('/sticker');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -63,6 +64,7 @@ export function QueuePage({ data }: { data: DashboardData }) {
   const [waitNotice, setWaitNotice] = useState('');
   const [waitBusy, setWaitBusy] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
+  const [stickerTransferModalOpen, setStickerTransferModalOpen] = useState(false);
   const [toolRunning, setToolRunning] = useState(false);
 
   useEffect(() => {
@@ -118,6 +120,23 @@ export function QueuePage({ data }: { data: DashboardData }) {
     }
   };
 
+  const transferStickerWait = async () => {
+    if (!selectedWait?.relativePath) return;
+    setWaitBusy(true);
+    setWaitNotice('');
+    try {
+      const response = await fetch(`${apiBase}/wait/export`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ waitRelativePath: selectedWait.relativePath }) });
+      const payload = await response.json() as { ok?: boolean; message?: string };
+      if (!response.ok || !payload.ok) throw new Error(payload.message || 'Không thể chuyển file Sticker.');
+      setWaitNotice(payload.message || 'Đã chuyển file Sticker vào output AI.');
+      setStickerTransferModalOpen(false);
+    } catch (error) {
+      setWaitNotice(error instanceof Error ? error.message : 'Không thể chuyển file Sticker.');
+    } finally {
+      setWaitBusy(false);
+    }
+  };
+
   const markPrinted = async () => {
     if (!selectedWait?.relativePath) return;
     setWaitBusy(true);
@@ -151,8 +170,8 @@ export function QueuePage({ data }: { data: DashboardData }) {
         <div className="flex flex-wrap items-center gap-3">
           <FilterBar><QueueSearchInput value={search} onChange={setSearch} /></FilterBar>
           <div className="ml-auto flex flex-wrap gap-3">
-            <button type="button" disabled={!selectedWait || waitBusy || toolRunning} onClick={() => setExportModalOpen(true)} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-blue-300 bg-blue-50 px-5 text-left text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-6 w-6"/><span><b className="block">Export File</b><small className="text-xs text-blue-500">Sao chép wait và xuất thành phẩm</small></span></button>
-            <button type="button" disabled={!selectedWait || waitBusy || toolRunning} onClick={() => setWaitAction('printed')} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 text-left text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 className="h-6 w-6"/><span><b className="block">Đã in</b><small className="text-xs text-emerald-500">Đánh dấu file wait đã in</small></span></button>
+            <button type="button" disabled={!selectedWait || waitBusy || toolRunning} onClick={() => isSticker ? setStickerTransferModalOpen(true) : setExportModalOpen(true)} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-blue-300 bg-blue-50 px-5 text-left text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-6 w-6"/><span><b className="block">{isSticker ? 'Chuyển Output AI' : 'Export File'}</b><small className="text-xs text-blue-500">{isSticker ? 'Chuyển thẳng wait vào output AI theo ngày' : 'Sao chép wait và xuất thành phẩm'}</small></span></button>
+            {!isSticker ? <button type="button" disabled={!selectedWait || waitBusy || toolRunning} onClick={() => setWaitAction('printed')} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 text-left text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 className="h-6 w-6"/><span><b className="block">Đã in</b><small className="text-xs text-emerald-500">Đánh dấu file wait đã in</small></span></button> : null}
           </div>
         </div>
         {waitNotice ? <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{waitNotice}</div> : null}
@@ -189,8 +208,13 @@ export function QueuePage({ data }: { data: DashboardData }) {
       </div>
       {waitAction === 'printed' && selectedWait ? <WaitPrintedModal fileName={selectedWait.fileName} busy={waitBusy} onClose={() => !waitBusy && setWaitAction(null)} onConfirm={() => void markPrinted()} /> : null}
       {exportModalOpen && selectedWait ? <WaitExportModal fileName={selectedWait.fileName} busy={waitBusy} onClose={() => !waitBusy && setExportModalOpen(false)} onSubmit={(assets) => void exportWait(assets)} /> : null}
+      {stickerTransferModalOpen && selectedWait ? <StickerTransferModal fileName={selectedWait.fileName} busy={waitBusy} onClose={() => !waitBusy && setStickerTransferModalOpen(false)} onConfirm={() => void transferStickerWait()} /> : null}
     </div>
   );
+}
+
+function StickerTransferModal({ fileName, busy, onClose, onConfirm }: { fileName: string; busy: boolean; onClose: () => void; onConfirm: () => void }) {
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl"><div className="text-xl font-semibold text-slate-900">Chuyển Sticker vào Output AI?</div><p className="mt-3 break-all text-sm leading-6 text-slate-600">File <b>{fileName}</b> sẽ được chuyển khỏi hàng chờ vào thư mục output AI của ngày hiện tại và tự đánh số tiếp theo (01, 02, 03...).</p><div className="mt-6 grid grid-cols-2 gap-3"><button type="button" disabled={busy} onClick={onClose} className="h-12 rounded-2xl border border-slate-300 text-sm font-semibold text-slate-700 disabled:opacity-40">Hủy</button><button type="button" disabled={busy} onClick={onConfirm} className="h-12 rounded-2xl bg-blue-600 text-sm font-semibold text-white disabled:opacity-40">{busy ? 'Đang chuyển...' : 'Xác nhận'}</button></div></div></div>;
 }
 
 function WaitPrintedModal({ fileName, busy, onClose, onConfirm }: { fileName: string; busy: boolean; onClose: () => void; onConfirm: () => void }) {
