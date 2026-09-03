@@ -58,11 +58,24 @@ type Snapshot = {
 
 const factoryRoot = process.env.ACRYLIC_FACTORY_ROOT ?? 'D:/FFACTORY/Arcylic';
 const appRoot = process.env.ACRYLIC_APP_ROOT ?? factoryRoot;
-const currentSetupVersion = '2026-08-30.1';
+const currentSetupVersion = '2026-09-03.1';
 const toolDir = path.join(appRoot, 'Tool');
 const toolStatePath = path.join(factoryRoot, '.runtime', 'tool-ui-state.json');
 const operationRuntimeDir = path.join(factoryRoot, '.runtime', 'operations');
 const operationRunnerPath = path.join(appRoot, 'scripts', 'tool-operation-runner.mjs');
+
+function resolveNodeExecutable() {
+  const candidates = [
+    process.env.ACRYLIC_NODE_PATH,
+    process.platform === 'win32' ? path.join(process.env.ProgramFiles ?? 'C:/Program Files', 'nodejs', 'node.exe') : undefined,
+    process.platform === 'win32' ? path.join(process.env['ProgramFiles(x86)'] ?? 'C:/Program Files (x86)', 'nodejs', 'node.exe') : undefined,
+    // Vite runs under Node in development; retain this as a portable fallback.
+    /electron(?:\.exe)?$/i.test(path.basename(process.execPath)) ? undefined : process.execPath,
+  ];
+  return candidates.find((candidate): candidate is string => Boolean(candidate) && existsSync(candidate)) ?? 'node';
+}
+
+const nodeExecutable = resolveNodeExecutable();
 const thumbnailCacheDir = path.join(factoryRoot, '.runtime', 'thumb-cache');
 const folderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings.json');
 const holoFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-holo.json');
@@ -638,7 +651,7 @@ function runExport(outputAiRelativePath: string, assets: ExportAssetKind[]) {
   const outputAiPath = resolveOutputAiPath(outputAiRelativePath);
   const selected: ExportAssetKind[] = assets.length ? assets : ['front', 'back', 'lazer'];
   const run: ToolRun = { id: `export-${Date.now()}`, kind: 'export', command: 'check', status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: [`> export bundle: ${selected.join(', ')}`], exportAssets: selected, outputAiRelativePath };
-  launchPersistentOperation(run, 'node', [path.join(toolDir, 'dist-bundle', 'test-export-output-assets.cjs'), outputAiPath], { ACRYLIC_EXPORT_ASSETS: selected.join(',') });
+  launchPersistentOperation(run, nodeExecutable, [path.join(toolDir, 'dist-bundle', 'test-export-output-assets.cjs'), outputAiPath], { ACRYLIC_EXPORT_ASSETS: selected.join(',') });
   return { ok: true, message: 'Đã bắt đầu export.', run: activeRun };
 }
 
@@ -650,7 +663,7 @@ function runTool(command: ToolCommand) {
     const stickerPaths = { root: path.join(stickerRoot), template: folderPaths.template, images: folderPaths.Images, done: folderPaths.imgaes_done, error: folderPaths.images_error, wait: folderPaths.wait, waitMeta: folderPaths.wait_meta, noteDone: folderPaths.note_done, noteWork: folderPaths.note_work };
     const source = readFileSync(path.join(toolDir, 'scripts', 'sticker-vinyl.jsx'), 'utf8');
     const stickerSettings = loadStickerSettings();
-    const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};`;
+    const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork, CODEX_STICKER_OUTPUT_AI_DIR: folderPaths.output_ai }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};`;
     writeFileSync(stickerRuntimePath, prefix + '\n' + source, 'utf8');
     const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: sticker'] };
     launchPersistentOperation(run, 'cscript.exe', ['//nologo', path.join(toolDir, 'scripts', 'launch-illustrator-and-run.vbs'), stickerRuntimePath], { ACRYLIC_STICKER_MODE: '1' });
@@ -664,7 +677,7 @@ function runTool(command: ToolCommand) {
         ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
       : { ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_FAST_NO_FIT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
   const executablePath = command === 'test' ? path.join(toolDir, 'dist-bundle', 'test-import-one-image.cjs') : path.join(toolDir, 'dist-bundle', 'index.cjs');  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
-  launchPersistentOperation(run, 'node', [executablePath], commandEnv);
+  launchPersistentOperation(run, nodeExecutable, [executablePath], commandEnv);
   return { ok: true, message: 'Đã chạy Tool ' + command + '.', run: activeRun };
 }
 
@@ -1059,7 +1072,7 @@ function localFilesystemApi(): Plugin {
               return;
             }
             const command = payload.command;
-            if (!['start', 'all', 'check', 'test'].includes(String(command))) {
+            if (!['start', 'all', 'check', 'test', 'sticker'].includes(String(command))) {
               json(response, { ok: false, message: 'Lệnh Tool không hợp lệ.', run: toolStatus().run }, 400);
               return;
             }

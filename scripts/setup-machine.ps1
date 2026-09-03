@@ -1,7 +1,7 @@
-param([string]$Root = 'D:\FFACTORY\Arcylic')
+﻿param([string]$Root = 'D:\FFACTORY\Arcylic')
 $ErrorActionPreference = 'Stop'
 $assetRoot = Split-Path -Parent $PSScriptRoot
-$setupVersion = '2026-08-30.1'
+$setupVersion = '2026-09-03.1'
 $runtime = Join-Path $Root '.runtime'
 $resultPath = Join-Path $runtime 'machine-setup.json'
 New-Item -ItemType Directory -Force -Path $runtime | Out-Null
