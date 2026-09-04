@@ -97,6 +97,15 @@ function DashboardRoutes() {
       <Route path="/sticker/outputs" element={<OutputsPage data={data} />} />
       <Route path="/sticker/history" element={<HistoryPage data={data} />} />
       <Route path="/sticker/settings" element={<SettingsPage data={data} />} />
+      <Route path="/sticker-holo" element={<OverviewPage data={data} />} />
+      <Route path="/sticker-holo/queue" element={<QueuePage data={data} />} />
+      <Route path="/sticker-holo/tool" element={<ToolPage />} />
+      <Route path="/sticker-holo/done" element={<DonePage data={data} />} />
+      <Route path="/sticker-holo/processed" element={<ProcessedPage data={data} />} />
+      <Route path="/sticker-holo/errors" element={<ErrorsPage data={data} />} />
+      <Route path="/sticker-holo/outputs" element={<OutputsPage data={data} />} />
+      <Route path="/sticker-holo/history" element={<HistoryPage data={data} />} />
+      <Route path="/sticker-holo/settings" element={<SettingsPage data={data} />} />
       <Route path="*" element={<OverviewPage data={data} />} />
     </Routes>
   </AppShell></>;

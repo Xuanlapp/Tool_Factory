@@ -56,7 +56,8 @@ function readColorRegions(buffer: Buffer, sideCount: number) {
     for (let y = startY; y < endY; y += 1) for (let x = 0; x < png.width; x += 1) {
       const offset = (y * png.width + x) * 4;
       const red = png.data[offset], green = png.data[offset + 1], blue = png.data[offset + 2], alpha = png.data[offset + 3];
-      if (alpha <= 10 || (red > 245 && green > 245 && blue > 245)) continue;
+      // White is printable artwork when it is opaque; only transparent pixels are outside the item.
+      if (alpha <= 10) continue;
       pixels += 1;
       const row = rowMap.get(y) ?? { minX: x, maxX: x, pixels: 0 };
       row.minX = Math.min(row.minX, x); row.maxX = Math.max(row.maxX, x); row.pixels += 1; rowMap.set(y, row);

@@ -906,6 +906,13 @@ async function restoreLegacyWaitPngs() {
         console.log('Restored legacy wait PNG to Images: ' + path.basename(restoredPath));
     }
 }
+async function createLocalExportSource(sourcePath) {
+    const tempDir = path.join(runtimeDir, 'export-source', String(Date.now()));
+    const localPath = path.join(tempDir, path.basename(sourcePath));
+    await mkdir(tempDir, { recursive: true });
+    await copyFile(sourcePath, localPath);
+    return { localPath, tempDir };
+}
 async function exportOutputAssets(outputAiPath, vbsPath) {
     const scriptPath = path.join(rootDir, 'scripts', 'export-output-assets.jsx');
     await ensurePathExists(scriptPath);
@@ -919,10 +926,11 @@ async function exportOutputAssets(outputAiPath, vbsPath) {
     await mkdir(path.dirname(outputFrontPath), { recursive: true });
     await mkdir(path.dirname(outputBackPath), { recursive: true });
     await mkdir(path.dirname(outputLazerPath), { recursive: true });
+    const localSource = await createLocalExportSource(outputAiPath);
     const resultPath = path.join(runtimeDir, 'export-output-assets-result.json');
     const source = (await readFile(scriptPath, 'utf8')).replace(/^\uFEFF/, '');
     const runtimeSource = [
-        'var CODEX_OUTPUT_AI_PATH = ' + JSON.stringify(toJsxPath(outputAiPath)) + ';',
+        'var CODEX_OUTPUT_AI_PATH = ' + JSON.stringify(toJsxPath(localSource.localPath)) + ';',
         'var CODEX_OUTPUT_FRONT_PATH = ' + JSON.stringify(toJsxPath(outputFrontPath)) + ';',
         'var CODEX_OUTPUT_BACK_PATH = ' + JSON.stringify(toJsxPath(outputBackPath)) + ';',
         'var CODEX_OUTPUT_LAZER_PATH = ' + JSON.stringify(toJsxPath(outputLazerPath)) + ';',
@@ -932,21 +940,25 @@ async function exportOutputAssets(outputAiPath, vbsPath) {
         source,
     ].join('\n');
     const runtimePath = path.join(runtimeDir, 'export-output-assets-runtime.jsx');
-    await writeFile(runtimePath, runtimeSource, 'utf8');
-    await clearPathIfExists(resultPath);
-    await runCommand('cscript.exe', ['//nologo', vbsPath, runtimePath]);
-    const result = JSON.parse(await readFile(resultPath, 'utf8'));
-    if (result.success !== true)
-        throw new Error(result.message || 'EXPORT_OUTPUT_ASSETS_FAILED');
-    const dpiPaths = [outputFrontPath];
-    if (result.backExported === true)
-        dpiPaths.push(outputBackPath);
-    await Promise.all(dpiPaths.map((pngPath) => setPngDpiMetadata(pngPath, 300)));
-    console.log(result.backExported === true ? 'Set FRONT/BACK PNG metadata to 300 DPI.' : 'Set FRONT PNG metadata to 300 DPI; BACK skipped (no artwork).');
-    console.log('Exported FRONT PNG: ' + outputFrontPath);
-    if (result.backExported === true)
-        console.log('Exported BACK PNG: ' + outputBackPath);
-    console.log('Exported LAZER AI Illustrator 8: ' + outputLazerPath);
+    try {
+        await writeFile(runtimePath, runtimeSource, 'utf8');
+        await clearPathIfExists(resultPath);
+        await runCommand('cscript.exe', ['//nologo', vbsPath, runtimePath]);
+        const result = JSON.parse(await readFile(resultPath, 'utf8'));
+        if (result.success !== true)
+            throw new Error(result.message || 'EXPORT_OUTPUT_ASSETS_FAILED');
+        const dpiPaths = [outputFrontPath];
+        if (result.backExported === true)
+            dpiPaths.push(outputBackPath);
+        await Promise.all(dpiPaths.map((pngPath) => setPngDpiMetadata(pngPath, 300)));
+        console.log(result.backExported === true ? 'Set FRONT/BACK PNG metadata to 300 DPI.' : 'Set FRONT PNG metadata to 300 DPI; BACK skipped (no artwork).');
+        console.log('Exported FRONT PNG: ' + outputFrontPath);
+        if (result.backExported === true)
+            console.log('Exported BACK PNG: ' + outputBackPath);
+        console.log('Exported LAZER AI Illustrator 8: ' + outputLazerPath);
+    } finally {
+        await rm(localSource.tempDir, { recursive: true, force: true });
+    }
 }
 function crc32(buffer) {
     let crc = 0xffffffff;

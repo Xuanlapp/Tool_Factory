@@ -72,7 +72,7 @@ function resolveNodeExecutable() {
     // Vite runs under Node in development; retain this as a portable fallback.
     /electron(?:\.exe)?$/i.test(path.basename(process.execPath)) ? undefined : process.execPath,
   ];
-  return candidates.find((candidate): candidate is string => Boolean(candidate) && existsSync(candidate)) ?? 'node';
+  return candidates.find((candidate): candidate is string => typeof candidate === 'string' && candidate.length > 0 && existsSync(candidate)) ?? 'node';
 }
 
 const nodeExecutable = resolveNodeExecutable();
@@ -109,25 +109,50 @@ const defaultHoloFolderPaths: Record<string, string> = {
 const externalStickerRoot = path.join(factoryRoot, '..', 'Sticker Vinyl');
 const bundledStickerRoot = path.join(factoryRoot, 'Sticker Vinyl');
 const stickerRoot = existsSync(externalStickerRoot) ? externalStickerRoot : bundledStickerRoot;
+const stickerSharedTemplatePath = path.join(stickerRoot, 'template', 'template_saved.ai');
+const externalStickerHoloRoot = 'X:/OUTPUT/HOLO_STICKER';
+const bundledStickerHoloRoot = path.join(factoryRoot, 'Sticker Holo');
+const stickerHoloRoot = existsSync(externalStickerHoloRoot) ? externalStickerHoloRoot : bundledStickerHoloRoot;
 const defaultStickerFolderPaths: Record<string, string> = {
   Images: path.join(stickerRoot, 'Sticker'),
   images_error: path.join(stickerRoot, 'image-error'),
   images_processed: path.join(stickerRoot, 'image-processed'),
   imgaes_done: path.join(stickerRoot, 'image-done'),
-  wait: path.join(stickerRoot, 'template', 'wait'),
-  output_ai: path.join(stickerRoot, 'template', 'output_ai'),
-  output_front: path.join(stickerRoot, 'template', 'output_front'),
-  output_back: path.join(stickerRoot, 'template', 'output_back'),
-  output_lazer: path.join(stickerRoot, 'template', 'output_lazer'),
+  wait: path.join(stickerRoot, 'wait'),
+  output_ai: path.join(stickerRoot, 'output_ai'),
+  output_front: path.join(stickerRoot, 'output_front'),
+  output_back: path.join(stickerRoot, 'output_back'),
+  output_lazer: path.join(stickerRoot, 'output_lazer'),
   template: path.join(stickerRoot, 'template'),
-  wait_meta: path.join(stickerRoot, 'template', 'wait-meta'),
-  note_done: path.join(stickerRoot, 'template', 'note_done'),
-  note_work: path.join(stickerRoot, 'template', 'note_work'),
+  wait_meta: path.join(stickerRoot, 'wait-meta'),
+  note_done: path.join(stickerRoot, 'note_done'),
+  note_work: path.join(stickerRoot, 'note_work'),
+};
+const defaultStickerHoloFolderPaths: Record<string, string> = {
+  Images: path.join(stickerHoloRoot, 'Sticker'),
+  images_error: path.join(stickerHoloRoot, 'image-error'),
+  images_processed: path.join(stickerHoloRoot, 'image-processed'),
+  imgaes_done: path.join(stickerHoloRoot, 'image-done'),
+  wait: path.join(stickerHoloRoot, 'wait'),
+  output_ai: path.join(stickerHoloRoot, 'output_ai'),
+  output_front: path.join(stickerHoloRoot, 'output_front'),
+  output_back: path.join(stickerHoloRoot, 'output_back'),
+  output_lazer: path.join(stickerHoloRoot, 'output_lazer'),
+  template: path.join(stickerHoloRoot, 'template'),
+  wait_meta: path.join(stickerHoloRoot, 'wait-meta'),
+  note_done: path.join(stickerHoloRoot, 'note_done'),
+  note_work: path.join(stickerHoloRoot, 'note_work'),
 };
 const stickerFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-sticker.json');
+const stickerHoloFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-sticker-holo.json');
 const stickerSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-settings.json');
-function folderSettingsFile(product = 'acrylic') { return product === 'holo' ? holoFolderSettingsPath : product === 'sticker' ? stickerFolderSettingsPath : folderSettingsPath; }
-function defaultPathsFor(product = 'acrylic') { return product === 'holo' ? defaultHoloFolderPaths : product === 'sticker' ? defaultStickerFolderPaths : defaultFolderPaths; }
+const stickerHoloSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-holo-settings.json');
+const stickerTemplateSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-template-settings.json');
+const stickerHoloTemplateSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-holo-template-settings.json');
+function isStickerProduct(product: string) { return product === 'sticker' || product === 'sticker-holo'; }
+function folderSettingsFile(product = 'acrylic') { return product === 'holo' ? holoFolderSettingsPath : product === 'sticker-holo' ? stickerHoloFolderSettingsPath : product === 'sticker' ? stickerFolderSettingsPath : folderSettingsPath; }
+function defaultPathsFor(product = 'acrylic') { return product === 'holo' ? defaultHoloFolderPaths : product === 'sticker-holo' ? defaultStickerHoloFolderPaths : product === 'sticker' ? defaultStickerFolderPaths : defaultFolderPaths; }
+function defaultFolderRootFor(product = 'acrylic') { return product === 'sticker-holo' ? stickerHoloRoot : product === 'sticker' ? stickerRoot : factoryRoot; }
 function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; return { ...defaultPathsFor(product), ...saved }; } catch { return { ...defaultPathsFor(product) }; } }
 function saveFolderPaths(next: Record<string, string>, product = 'acrylic') { const settingsPath = folderSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 type CheckSettings = { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number; jsxBatchSize: number; itemGapCm: number };
@@ -136,8 +161,12 @@ const defaultCheckSettings: CheckSettings = { checkImageSize: true, checkTwoSide
 const defaultStickerSettings: StickerSettings = { marginMm: 3, gapMm: 5 };
 function loadCheckSettings(): CheckSettings { try { const saved = JSON.parse(readFileSync(checkSettingsPath, 'utf8')) as Partial<CheckSettings>; return { ...defaultCheckSettings, ...saved }; } catch { return { ...defaultCheckSettings }; } }
 function saveCheckSettings(next: CheckSettings) { mkdirSync(path.dirname(checkSettingsPath), { recursive: true }); writeFileSync(checkSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
-function loadStickerSettings(): StickerSettings { try { return { ...defaultStickerSettings, ...JSON.parse(readFileSync(stickerSettingsPath, 'utf8')) }; } catch { return { ...defaultStickerSettings }; } }
-function saveStickerSettings(next: StickerSettings) { mkdirSync(path.dirname(stickerSettingsPath), { recursive: true }); writeFileSync(stickerSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
+function stickerSettingsFile(product = activeProduct) { return product === 'sticker-holo' ? stickerHoloSettingsPath : stickerSettingsPath; }
+function loadStickerSettings(product = activeProduct): StickerSettings { try { return { ...defaultStickerSettings, ...JSON.parse(readFileSync(stickerSettingsFile(product), 'utf8')) }; } catch { return { ...defaultStickerSettings }; } }
+function saveStickerSettings(next: StickerSettings, product = activeProduct) { const settingsPath = stickerSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf8'); }
+function stickerTemplateSettingsFile(product = activeProduct) { return product === 'sticker-holo' ? stickerHoloTemplateSettingsPath : stickerTemplateSettingsPath; }
+function loadStickerTemplatePath(product = activeProduct) { try { const saved = JSON.parse(readFileSync(stickerTemplateSettingsFile(product), 'utf8')) as { templatePath?: unknown }; return typeof saved.templatePath === 'string' && saved.templatePath.trim() ? saved.templatePath : stickerSharedTemplatePath; } catch { return stickerSharedTemplatePath; } }
+function saveStickerTemplatePath(templatePath: string, product = activeProduct) { const settingsPath = stickerTemplateSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify({ templatePath }, null, 2), 'utf8'); }
 function isUncPath(value: string) { return /^\\\\[^\\]+\\[^\\]+/.test(value.trim()); }
 function mappedDriveOf(value: string) { return value.trim().match(/^([A-Za-z]:)(?:[\\/]|$)/)?.[1].toUpperCase(); }
 function normalizePathSlashes(value: string) { return value.trim().replace(/[\\/]+/g, path.sep); }
@@ -206,7 +235,7 @@ const initialFolderNormalization = normalizeSavedFolderPaths(loadFolderPaths());
 let folderPaths = initialFolderNormalization.normalizedPaths;
 let activeProduct = 'acrylic';
 function activateProduct(product: string) {
-  activeProduct = product === 'holo' || product === 'sticker' ? product : 'acrylic';
+  activeProduct = product === 'holo' || product === 'sticker' || product === 'sticker-holo' ? product : 'acrylic';
   const normalized = normalizeSavedFolderPaths(loadFolderPaths(activeProduct));
   folderPaths = normalized.normalizedPaths;
   folderPathWarnings = normalized.warnings;
@@ -478,9 +507,13 @@ function syncPersistentOperation() {
       const result = JSON.parse(readFileSync(activeRun.resultPath, 'utf8')) as { status: 'completed' | 'error'; exitCode?: number | null; endedAt?: string; message?: string };
       activeRun.status = result.status;
       activeRun.exitCode = result.exitCode;
+      const recentLogs = result.status === 'error' ? [...activeRun.logs].reverse() : [];
+      const failureDetail = recentLogs.find((line) => /Failed to run JSX.*EXPORT_[A-Z_]+:|PermissionError|EXPORT_[A-Z_]+:/i.test(line))
+        ?? recentLogs.find((line) => /Failed to run JSX|Test export failed|PermissionError/i.test(line));
       activeRun.logs.push(result.status === 'completed' ? 'Export hoàn tất thành công.' : `Export thất bại \(mã ${result.exitCode ?? 'không xác định'}).`);
       activeRun.endedAt = result.endedAt ?? new Date().toISOString();
       if (result.message) activeRun.logs.push(result.message);
+      else if (failureDetail) activeRun.logs.push('Chi tiết: ' + failureDetail);
       activeChild = null;
       broadcastToolStatus();
       void snapshot(true);
@@ -658,14 +691,15 @@ function runExport(outputAiRelativePath: string, assets: ExportAssetKind[]) {
 function runTool(command: ToolCommand) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
   if (command === 'sticker') {
-    const stickerRuntimePath = path.join(toolDir, '.runtime', 'sticker-vinyl-runtime.jsx');
+    const stickerHolo = activeProduct === 'sticker-holo';
+    const stickerRuntimePath = path.join(toolDir, '.runtime', stickerHolo ? 'sticker-holo-runtime.jsx' : 'sticker-vinyl-runtime.jsx');
     mkdirSync(path.dirname(stickerRuntimePath), { recursive: true });
-    const stickerPaths = { root: path.join(stickerRoot), template: folderPaths.template, images: folderPaths.Images, done: folderPaths.imgaes_done, error: folderPaths.images_error, wait: folderPaths.wait, waitMeta: folderPaths.wait_meta, noteDone: folderPaths.note_done, noteWork: folderPaths.note_work };
+    const stickerPaths = { root: stickerHolo ? stickerHoloRoot : stickerRoot, template: folderPaths.template, images: folderPaths.Images, done: folderPaths.imgaes_done, error: folderPaths.images_error, wait: folderPaths.wait, waitMeta: folderPaths.wait_meta, noteDone: folderPaths.note_done, noteWork: folderPaths.note_work };
     const source = readFileSync(path.join(toolDir, 'scripts', 'sticker-vinyl.jsx'), 'utf8');
     const stickerSettings = loadStickerSettings();
-    const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork, CODEX_STICKER_OUTPUT_AI_DIR: folderPaths.output_ai }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};`;
+    const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_TEMPLATE_FILE: loadStickerTemplatePath(), CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork, CODEX_STICKER_OUTPUT_AI_DIR: folderPaths.output_ai }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_HOLO_MODE = ${stickerHolo};\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};`;
     writeFileSync(stickerRuntimePath, prefix + '\n' + source, 'utf8');
-    const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: sticker'] };
+    const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: [`> chạy Tool bundle: ${stickerHolo ? 'sticker-holo' : 'sticker'}`] };
     launchPersistentOperation(run, 'cscript.exe', ['//nologo', path.join(toolDir, 'scripts', 'launch-illustrator-and-run.vbs'), stickerRuntimePath], { ACRYLIC_STICKER_MODE: '1' });
     return { ok: true, message: 'Đã chạy Tool Sticker Vinyl.', run: activeRun };
   }
@@ -698,13 +732,13 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
       if (!entry.isFile() || entry.name === '.error-metadata.json' || lowerName.endsWith('.manifest.json') || lowerName === 'thumbs.db' || lowerName === 'desktop.ini' || lowerName === '.ds_store' || lowerName.startsWith('~') || lowerName.endsWith('.tmp') || lowerName.endsWith('.bak') || lowerName.endsWith('.lock')) continue;
       const rootKey = Object.entries(folderPaths).find(([, folder]) => path.resolve(folder).toLowerCase() === path.resolve(root).toLowerCase())?.[0];
       const extension = path.extname(entry.name).toLowerCase();
-      if (activeProduct === 'sticker' && (rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed')) {
+      if (isStickerProduct(activeProduct) && (rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed')) {
         if (!['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.psd'].includes(extension)) continue;
       } else if ((rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed') && extension !== '.png') continue;
       // Illustrator writes this temporary file while Save As is in progress.
       // It is not a usable wait sheet and must never appear in the queue.
-      if (rootKey === 'wait' && (extension !== '.ai' || lowerName.endsWith('.saving.ai') || (activeProduct === 'sticker' ? !/_wait_/i.test(entry.name) : !/^wait_\d+(?:-\d+)?\.ai$/i.test(entry.name)))) continue;
-      if (rootKey === 'output_ai' && (extension !== '.ai' || (activeProduct !== 'sticker' && !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
+      if (rootKey === 'wait' && (extension !== '.ai' || lowerName.endsWith('.saving.ai') || (isStickerProduct(activeProduct) ? !/(?:_wait_|^wait(?:_holo)?_[0-9]+(?:_[0-9]+)?\.ai$)/i.test(entry.name) : !/^wait_\d+(?:-\d+)?\.ai$/i.test(entry.name)))) continue;
+      if (rootKey === 'output_ai' && (extension !== '.ai' || (!isStickerProduct(activeProduct) && !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
       if (rootKey === 'output_front' && (extension !== '.png' || !/_front\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_back' && (extension !== '.png' || !/_back\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_lazer' && (extension !== '.ai' || !/_lazer\.ai$/i.test(entry.name))) continue;
@@ -963,7 +997,7 @@ function localFilesystemApi(): Plugin {
       server.middlewares.use(async (request, response, next) => {
         const url = new URL(request.url ?? '/', 'http://localhost');
         if (!url.pathname.startsWith('/api/v1/')) return next();
-        const productMatch = url.pathname.match(/^\/api\/v1\/(holo|sticker)\//);
+        const productMatch = url.pathname.match(/^\/api\/v1\/(holo|sticker|sticker-holo)\//);
         const product = productMatch?.[1] ?? 'acrylic';
         if (productMatch) url.pathname = url.pathname.replace(`/api/v1/${product}/`, '/api/v1/');
         activateProduct(product);
@@ -1016,7 +1050,7 @@ function localFilesystemApi(): Plugin {
               const waitRelativePath = String(payload.waitRelativePath ?? '');
               const assets = Array.isArray(payload.assets) ? payload.assets.filter((item: unknown) => ['front', 'back', 'lazer'].includes(String(item))) as ExportAssetKind[] : [];
               if (!waitRelativePath) return json(response, { ok: false, message: 'Thiếu file wait để export.', run: toolStatus().run }, 400);
-              return json(response, activeProduct === 'sticker'
+              return json(response, isStickerProduct(activeProduct)
                 ? moveStickerWaitToOutput(waitRelativePath)
                 : copyWaitToOutputAndExport(waitRelativePath, assets));
             } catch (error) {
@@ -1140,6 +1174,11 @@ function localFilesystemApi(): Plugin {
           let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as Partial<StickerSettings>; const next = { marginMm: Math.max(0, Number(parsed.marginMm ?? 3)), gapMm: Math.max(0, Number(parsed.gapMm ?? 5)) }; saveStickerSettings(next); return json(response, { ok: true, stickerSettings: next }); } catch { return json(response, { ok: false, message: 'Không thể lưu cấu hình Sticker.' }, 400); } });
           return;
         }
+        if (url.pathname === '/api/v1/settings/sticker/template') {
+          if (request.method === 'GET') return json(response, { templatePath: loadStickerTemplatePath() });
+          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as { templatePath?: unknown }; const templatePath = String(parsed.templatePath ?? '').trim(); if (path.extname(templatePath).toLowerCase() !== '.ai' || !existsSync(templatePath)) return json(response, { ok: false, message: 'Vui lòng chọn file template .ai đang tồn tại.' }, 400); saveStickerTemplatePath(templatePath); return json(response, { ok: true, templatePath }); } catch { return json(response, { ok: false, message: 'Không thể lưu template Sticker.' }, 400); } });
+          return;
+        }
         if (url.pathname === '/api/v1/settings/checks/save') {
           let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => {
             try {
@@ -1148,6 +1187,59 @@ function localFilesystemApi(): Plugin {
               saveCheckSettings(checkSettings);
               return json(response, { ok: true, checkSettings });
             } catch { return json(response, { ok: false, message: 'Không thể lưu cấu hình check.' }, 400); }
+          });
+          return;
+        }
+        if (url.pathname === '/api/v1/settings/folders/setup-parent') {
+          if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
+          let body = ''; request.on('data', (chunk) => body += chunk); request.on('end', () => {
+            try {
+              const parsed = JSON.parse(body || '{}') as { parentPath?: unknown; moveData?: boolean };
+              if (activeRun?.status === 'running') return json(response, { ok: false, message: 'Không thể thiết lập folder khi Tool hoặc Export đang chạy.' }, 409);
+              const normalizedParent = normalizeFolderPath(String(parsed.parentPath ?? ''));
+              if (normalizedParent.warning || !normalizedParent.normalizedPath) return json(response, { ok: false, message: normalizedParent.warning ?? 'Đường dẫn folder cha không hợp lệ.' }, 400);
+              const parentHealth = canAccessFolder(normalizedParent.normalizedPath);
+              if (!parentHealth.reachable) return json(response, { ok: false, message: parentHealth.warning ?? 'Không thể tạo hoặc đọc folder cha.' }, 409);
+              const defaults = defaultPathsFor(activeProduct);
+              const defaultRoot = defaultFolderRootFor(activeProduct);
+              const nextPaths: Record<string, string> = {};
+              let createdCount = 0;
+              let existingCount = 0;
+              for (const [key, defaultPath] of Object.entries(defaults)) {
+                const relativePath = path.relative(defaultRoot, defaultPath);
+                if (!relativePath || relativePath.startsWith('..') || path.isAbsolute(relativePath)) throw new Error(`Đường dẫn mặc định không hợp lệ: ${key}`);
+                const targetPath = path.join(normalizedParent.normalizedPath, relativePath);
+                if (existsSync(targetPath)) existingCount += 1;
+                else { mkdirSync(targetPath, { recursive: true }); createdCount += 1; }
+                nextPaths[key] = targetPath;
+              }
+              let movedFolderCount = 0;
+              if (parsed.moveData === true) {
+                const topLevelMoves = Object.entries(nextPaths).filter(([key, targetPath]) => {
+                  const sourcePath = folderPaths[key];
+                  if (!sourcePath || path.resolve(sourcePath) === path.resolve(targetPath)) return false;
+                  return !Object.entries(folderPaths).some(([otherKey, otherPath]) => otherKey !== key && otherPath && path.resolve(sourcePath).toLowerCase().startsWith(path.resolve(otherPath).toLowerCase() + path.sep));
+                });
+                for (const [key, targetPath] of topLevelMoves) { moveFolderContents(folderPaths[key], targetPath); movedFolderCount += 1; }
+              }
+              let templateCopied = false;
+              if (isStickerProduct(activeProduct)) {
+                const targetTemplatePath = path.join(nextPaths.template, 'template_saved.ai');
+                if (!existsSync(targetTemplatePath) && existsSync(stickerSharedTemplatePath)) {
+                  fs.copyFileSync(stickerSharedTemplatePath, targetTemplatePath);
+                  templateCopied = true;
+                }
+                if (existsSync(targetTemplatePath)) saveStickerTemplatePath(targetTemplatePath);
+              }
+              folderPaths = nextPaths;
+              folderPathWarnings = {};
+              cachedSnapshot = null;
+              cacheExpiresAt = 0;
+              saveFolderPaths(folderPaths, activeProduct);
+              const templateMessage = templateCopied ? ' Đã thêm template_saved.ai.' : '';
+              const movementMessage = parsed.moveData === true ? ` Đã chuyển dữ liệu từ ${movedFolderCount} folder gốc.` : ' Không chuyển dữ liệu cũ.';
+              return json(response, { ok: true, folderPaths, parentPath: normalizedParent.normalizedPath, createdCount, existingCount, moveData: parsed.moveData === true, message: `Đã thiết lập ${createdCount} folder mới; giữ nguyên ${existingCount} folder đã có.${templateMessage}${movementMessage}` });
+            } catch (error) { return json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể thiết lập folder cha.' }, 400); }
           });
           return;
         }

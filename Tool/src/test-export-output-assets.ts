@@ -1,4 +1,4 @@
-﻿import { access, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { access, copyFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { constants } from "node:fs";
 import path from "node:path";
 import { spawn } from "node:child_process";
@@ -76,7 +76,7 @@ function selectedAssets() {
   return { front: values.has('front'), back: values.has('back'), lazer: values.has('lazer') };
 }
 
-async function buildRuntimeJsx(outputAiPath: string) {
+async function buildRuntimeJsx(localSourcePath: string, outputAiPath: string) {
   await mkdir(runtimeDir, { recursive: true });
   const { outputFrontPath, outputBackPath, outputLazerPath } = await getDerivedPaths(outputAiPath);
   await mkdir(path.dirname(outputFrontPath), { recursive: true });
@@ -86,7 +86,7 @@ async function buildRuntimeJsx(outputAiPath: string) {
   const assets = selectedAssets();
   const source = (await readFile(jsxTemplatePath, "utf8")).replace(/^\uFEFF/, "");
   const runtimeSource = [
-    `var CODEX_OUTPUT_AI_PATH = ${JSON.stringify(toJsxPath(outputAiPath))};`,
+    `var CODEX_OUTPUT_AI_PATH = ${JSON.stringify(toJsxPath(localSourcePath))};`,
     `var CODEX_OUTPUT_FRONT_PATH = ${JSON.stringify(toJsxPath(outputFrontPath))};`,
     `var CODEX_OUTPUT_BACK_PATH = ${JSON.stringify(toJsxPath(outputBackPath))};`,
     `var CODEX_OUTPUT_LAZER_PATH = ${JSON.stringify(toJsxPath(outputLazerPath))};`,
@@ -111,23 +111,31 @@ async function main() {
   await ensurePathExists(lazerTemplatePath);
   await ensurePathExists(pngDpiSetterPath);
   await ensurePathExists(outputAiPath);
-  const runtimePath = await buildRuntimeJsx(outputAiPath);
-  const resultPath = path.join(runtimeDir, "export-output-assets-result.json");
-  await rm(resultPath, { force: true });
-  console.log("Testing export for: " + outputAiPath);
-  await runCommand("cscript.exe", ["//nologo", vbsPath, runtimePath]);
-  const result = JSON.parse(await readFile(resultPath, "utf8")) as { success?: boolean; message?: string; backExported?: boolean };
-  if (result.success !== true) throw new Error(result.message || "EXPORT_OUTPUT_ASSETS_FAILED");
-  const { outputFrontPath, outputBackPath } = await getDerivedPaths(outputAiPath);
-  const dpiPaths = [outputFrontPath];
-  if (result.backExported === true) dpiPaths.push(outputBackPath);
-  await runCommand("python", [pngDpiSetterPath, "300", ...dpiPaths]);
-  console.log(result.backExported === true ? "Set FRONT/BACK PNG metadata to 300 DPI." : "Set FRONT PNG metadata to 300 DPI; BACK skipped (no artwork).");
-  console.log("Done.");
+  const localSourceDir = path.join(runtimeDir, "export-source", String(Date.now()));
+  const localSourcePath = path.join(localSourceDir, path.basename(outputAiPath));
+  await mkdir(localSourceDir, { recursive: true });
+  console.log("Copying source AI from NAS to local runtime...");
+  await copyFile(outputAiPath, localSourcePath);
+  try {
+    const runtimePath = await buildRuntimeJsx(localSourcePath, outputAiPath);
+    const resultPath = path.join(runtimeDir, "export-output-assets-result.json");
+    await rm(resultPath, { force: true });
+    console.log("Testing export from local copy: " + localSourcePath);
+    await runCommand("cscript.exe", ["//nologo", vbsPath, runtimePath]);
+    const result = JSON.parse(await readFile(resultPath, "utf8")) as { success?: boolean; message?: string; backExported?: boolean };
+    if (result.success !== true) throw new Error(result.message || "EXPORT_OUTPUT_ASSETS_FAILED");
+    const { outputFrontPath, outputBackPath } = await getDerivedPaths(outputAiPath);
+    const dpiPaths = [outputFrontPath];
+    if (result.backExported === true) dpiPaths.push(outputBackPath);
+    await runCommand("python", [pngDpiSetterPath, "300", ...dpiPaths]);
+    console.log(result.backExported === true ? "Set FRONT/BACK PNG metadata to 300 DPI." : "Set FRONT PNG metadata to 300 DPI; BACK skipped (no artwork).");
+    console.log("Done.");
+  } finally {
+    await rm(localSourceDir, { recursive: true, force: true });
+  }
 }
 
 main().catch((error) => {
   console.error("Test export failed:", error instanceof Error ? error.message : error);
   process.exitCode = 1;
 });
-

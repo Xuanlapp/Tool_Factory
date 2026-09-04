@@ -132,6 +132,12 @@ ipcMain.handle('acrylic:select-folder', async () => {
   return result.filePaths[0];
 });
 
+ipcMain.handle('acrylic:select-file', async () => {
+  const result = await dialog.showOpenDialog({ properties: ['openFile'], filters: [{ name: 'Adobe Illustrator', extensions: ['ai'] }] });
+  if (result.canceled || !result.filePaths[0]) return null;
+  return result.filePaths[0];
+});
+
 app.whenReady().then(async () => {
   startBundledWeb();
   await waitForWeb();

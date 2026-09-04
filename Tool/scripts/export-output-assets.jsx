@@ -67,6 +67,15 @@ function removeExportLabel(documentRef) {
   } catch (error) {}
 }
 
+function placeLabelInFreeSpace(documentRef, textFrame) {
+  var artboard = documentRef.artboards[documentRef.artboards.getActiveArtboardIndex()].artboardRect;
+  var artboardBounds = { left: artboard[0], top: artboard[1], right: artboard[2], bottom: artboard[3] };
+  var current = textFrame.geometricBounds;
+  var centeredLeft = artboardBounds.left + ((artboardBounds.right - artboardBounds.left) - (current[2] - current[0])) / 2;
+  // Place the filename inside the template, directly below its top edge.
+  textFrame.translate(centeredLeft - current[0], artboardBounds.top - current[1]);
+}
+
 function addExportFileNameLabel(documentRef) {
   removeExportLabel(documentRef);
   var layer = documentRef.layers.add();
@@ -76,22 +85,16 @@ function addExportFileNameLabel(documentRef) {
   var artboard = documentRef.artboards[documentRef.artboards.getActiveArtboardIndex()].artboardRect;
   var left = artboard[0];
   var top = artboard[1];
-  var right = artboard[2];
-  var width = right - left;
   var labelText = outputAiBaseName();
   var textFrame = layer.textFrames.add();
   textFrame.contents = labelText;
   textFrame.kind = TextType.POINTTEXT;
-  textFrame.position = [left + width / 2, top - 9];
+  textFrame.position = [left, top];
   try { textFrame.textRange.characterAttributes.size = 13; } catch (error) {}
   try { textFrame.textRange.characterAttributes.fillColor = rgb(20, 20, 20); } catch (error) {}
   try { textFrame.textRange.characterAttributes.textFont = app.textFonts.getByName('Arial-BoldMT'); } catch (error) {}
   try { textFrame.paragraphs[0].paragraphAttributes.justification = Justification.CENTER; } catch (error) {}
-  try {
-    var bounds = textFrame.geometricBounds;
-    var currentCenter = (bounds[0] + bounds[2]) / 2;
-    textFrame.translate((left + width / 2) - currentCenter, 0);
-  } catch (error) {}
+  placeLabelInFreeSpace(documentRef, textFrame);
   try { layer.zOrder(ZOrderMethod.BRINGTOFRONT); } catch (error) {}
 }
 
@@ -155,10 +158,12 @@ function selectAllInLayer(documentRef, layer) {
 
 function copyLazerInPlace(sourceDocument, targetDocument) {
   sourceDocument.activate();
-  setVisibleLayers(sourceDocument, ['LAZER']);
   var sourceLayer = findTopLayer(sourceDocument, 'LAZER');
+  if (sourceLayer === null || !layerHasArtwork(sourceLayer)) sourceLayer = findTopLayer(sourceDocument, 'BORDER');
+  if (sourceLayer === null || !layerHasArtwork(sourceLayer)) throw new Error('LAZER_AND_BORDER_LAYER_EMPTY');
+  setVisibleLayers(sourceDocument, [sourceLayer.name]);
   var selectedCount = selectAllInLayer(sourceDocument, sourceLayer);
-  if (selectedCount <= 0) throw new Error('LAZER_LAYER_EMPTY');
+  if (selectedCount <= 0) throw new Error('LAZER_AND_BORDER_LAYER_EMPTY');
   app.executeMenuCommand('copy');
   targetDocument.activate();
   var targetLayer = findTopLayer(targetDocument, 'LAZER');
@@ -237,6 +242,14 @@ function closeAllDocuments() {
   } catch (error) {}
 }
 
+function runExportStep(stepName, operation) {
+  try {
+    return operation();
+  } catch (error) {
+    throw new Error(stepName + ': ' + String(error));
+  }
+}
+
 function run() {
   var sourceDocument = null;
   try {
@@ -244,18 +257,18 @@ function run() {
     if (!sourceFile.exists) throw new Error('OUTPUT_AI_MISSING: ' + CODEX_OUTPUT_AI_PATH);
     debugPipelineStep('Chu?n b? m? output_ai');
     sourceDocument = findOpenOutputDocument(CODEX_OUTPUT_AI_PATH);
-    if (sourceDocument === null) sourceDocument = app.open(sourceFile);
+    if (sourceDocument === null) sourceDocument = runExportStep('OPEN_OUTPUT_AI', function () { return app.open(sourceFile); });
     debugPipelineStep('?? m? output_ai');
     var exportFront = typeof CODEX_EXPORT_FRONT === 'undefined' || CODEX_EXPORT_FRONT === true;
     var exportBack = typeof CODEX_EXPORT_BACK === 'undefined' || CODEX_EXPORT_BACK === true;
     var exportLazer = typeof CODEX_EXPORT_LAZER === 'undefined' || CODEX_EXPORT_LAZER === true;
-    addExportFileNameLabel(sourceDocument);
-    if (exportFront) exportPng300(sourceDocument, CODEX_OUTPUT_FRONT_PATH, ['EYE', 'FRONT', exportLabelLayerName()]);
+    runExportStep('ADD_EXPORT_LABEL', function () { addExportFileNameLabel(sourceDocument); });
+    if (exportFront) runExportStep('EXPORT_FRONT_PNG', function () { exportPng300(sourceDocument, CODEX_OUTPUT_FRONT_PATH, ['EYE', 'FRONT', exportLabelLayerName()]); });
     var backLayer = findTopLayer(sourceDocument, 'BACK');
     var hasBackArtwork = backLayer !== null && layerHasArtwork(backLayer);
     var backExported = exportBack && hasBackArtwork;
     if (backExported) {
-      exportPng300(sourceDocument, CODEX_OUTPUT_BACK_PATH, ['BACK', exportLabelLayerName()]);
+      runExportStep('EXPORT_BACK_PNG', function () { exportPng300(sourceDocument, CODEX_OUTPUT_BACK_PATH, ['BACK', exportLabelLayerName()]); });
     } else if (exportBack) {
       try {
         var backFile = new File(CODEX_OUTPUT_BACK_PATH);
@@ -264,7 +277,7 @@ function run() {
     }
     CODEX_BACK_EXPORTED = backExported;
     removeExportLabel(sourceDocument);
-    if (exportLazer) saveLazerIllustrator8(sourceDocument, CODEX_LAZER_TEMPLATE_PATH, CODEX_OUTPUT_LAZER_PATH);
+    if (exportLazer) runExportStep('EXPORT_LAZER_AI', function () { saveLazerIllustrator8(sourceDocument, CODEX_LAZER_TEMPLATE_PATH, CODEX_OUTPUT_LAZER_PATH); });
     writeResult(true, 'OK');
   } catch (error) {
     writeResult(false, String(error));
@@ -277,6 +290,3 @@ function run() {
 }
 
 run();
-
-
-

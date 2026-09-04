@@ -1,6 +1,6 @@
-var CODEX_WAIT_PRINTED_SOURCE_PATH = "D:/FFACTORY/Arcylic/wait/wait_5-5.ai";
+var CODEX_WAIT_PRINTED_SOURCE_PATH = "//192.168.1.220/XUONG/OUTPUT/ARCYLIC/wait/wait_7-5.ai";
 var CODEX_WAIT_PRINTED_RESULT_PATH = "D:/FFACTORY/Arcylic/.runtime/wait-printed-result.json";
-var CODEX_WAIT_PRINTED_MANIFEST_PATH = "D:/FFACTORY/Arcylic/wait/wait_5-5.manifest.json";
+var CODEX_WAIT_PRINTED_MANIFEST_PATH = "//192.168.1.220/XUONG/OUTPUT/ARCYLIC/wait/wait_7-5.manifest.json";
 ﻿function normalizePath(value) {
   try { return String(value).replace(/\\/g, '/').toLowerCase(); } catch (error) {}
   return '';

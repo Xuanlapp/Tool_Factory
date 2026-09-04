@@ -29,7 +29,8 @@ function readRegions(buffer: Buffer, sideCount: number) {
       const offset = (y * png.width + x) * 4;
       const alpha = png.data[offset + 3];
       const red = png.data[offset], green = png.data[offset + 1], blue = png.data[offset + 2];
-      if (alpha <= 10 || (red > 245 && green > 245 && blue > 245)) continue;
+      // Preserve opaque white artwork so cut-alignment checks use the true printable bounds.
+      if (alpha <= 10) continue;
       pixels += 1;
       minX = Math.min(minX, x); minY = Math.min(minY, y); maxX = Math.max(maxX, x); maxY = Math.max(maxY, y);
     }

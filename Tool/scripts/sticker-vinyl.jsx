@@ -118,13 +118,14 @@ KẾT LUẬN
         var WAIT_FOLDER = (typeof CODEX_STICKER_WAIT_DIR !== 'undefined' ? CODEX_STICKER_WAIT_DIR : OUT_TEMPLATE + "/wait");
         var WAIT_META_FOLDER = (typeof CODEX_STICKER_WAIT_META_DIR !== 'undefined' ? CODEX_STICKER_WAIT_META_DIR : OUT_TEMPLATE + "/wait-meta");
         var NOTEWORKFOLDER = getTodayFolder(typeof CODEX_STICKER_NOTE_WORK_DIR !== 'undefined' ? CODEX_STICKER_NOTE_WORK_DIR : OUT_TEMPLATE + "/note_work");
-        var DEBUG_STEP_MODE = true; // true = dừng từng bước để xem, false = chạy tự động
+        var DEBUG_STEP_MODE = false; // true = dừng từng bước để xem, false = chạy tự động
         var GAP_MM = (typeof CODEX_STICKER_GAP_MM !== 'undefined' ? Number(CODEX_STICKER_GAP_MM) : 5);
         var MARGIN_MM = (typeof CODEX_STICKER_MARGIN_MM !== 'undefined' ? Number(CODEX_STICKER_MARGIN_MM) : 3);
         var RUN_WAIT_MODE = false;
         var WAIT_SOURCE_FILE = null;
         var WAIT_BASE_NAME = "";
         var WAIT_MAX_INCH = null;
+        var WAIT_FILE_PREFIX = (typeof CODEX_STICKER_HOLO_MODE !== 'undefined' && CODEX_STICKER_HOLO_MODE) ? "wait_holo" : "wait";
         var SHOULD_CLOSE_AFTER_SAVE = false;
         var GAP_PT = GAP_MM * 2.834645669;
         var MARGIN_PT = MARGIN_MM * 2.834645669;
@@ -164,7 +165,7 @@ KẾT LUẬN
             if (!waitFolder.exists) return null;
 
             var waitFiles = waitFolder.getFiles(function (f) {
-                return f instanceof File && /\.ai$/i.test(f.name) && /_wait_/i.test(f.name);
+                return f instanceof File && /\.ai$/i.test(f.name) && (/_wait_/i.test(f.name) || /^wait(?:_holo)?_[0-9]+(?:_[0-9]+)?\.ai$/i.test(f.name));
             });
 
             if (!waitFiles || waitFiles.length === 0) return null;
@@ -178,11 +179,18 @@ KẾT LUẬN
             var f = waitFiles[0];
             var base = stripExt(f.name);
 
-            var m = base.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)$/i);
-            if (!m) return null;
-
-            var baseName = m[1];
-            var inchText = m[2].replace("_", ".");
+            var m = base.match(/^(wait(?:_holo)?)_([0-9]+(?:_[0-9]+)?)$/i);
+            var baseName = "";
+            var inchText = "";
+            if (m) {
+                baseName = m[1];
+                inchText = m[2].replace("_", ".");
+            } else {
+                m = base.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)$/i);
+                if (!m) return null;
+                baseName = m[1];
+                inchText = m[2].replace("_", ".");
+            }
             var maxInch = parseFloat(inchText);
 
             return {
@@ -225,7 +233,7 @@ KẾT LUẬN
 
                 doc = app.open(WAIT_SOURCE_FILE);
             } else {
-                var tmplFileOpen = new File(OUT_TEMPLATE + "/template_saved.ai");
+                var tmplFileOpen = new File(typeof CODEX_STICKER_TEMPLATE_FILE !== 'undefined' ? CODEX_STICKER_TEMPLATE_FILE : OUT_TEMPLATE + "/template_saved.ai");
                 if (tmplFileOpen.exists) {
                     doc = app.open(tmplFileOpen);
                 }
@@ -899,10 +907,9 @@ KẾT LUẬN
                 if (!waitMetaFolder || !waitMetaFolder.exists) return null;
 
                 var sizePart = String(maxInch).replace(".", "_");
-                var metaFile = new File(waitMetaFolder.fsName + "/" + baseName + "_wait_" + sizePart + ".json");
+                var metaFile = new File(waitMetaFolder.fsName + "/" + waitArtifactBaseName(baseName, maxInch) + ".json");
                 if (!metaFile.exists) {
-                    // Backward compatibility for old naming style: baseNamewait5.json
-                    metaFile = new File(waitMetaFolder.fsName + "/" + baseName + "wait" + sizePart + ".json");
+                    metaFile = new File(waitMetaFolder.fsName + "/" + baseName + "_wait_" + sizePart + ".json");
                 }
                 if (!metaFile.exists) return null;
 
@@ -1008,7 +1015,7 @@ KẾT LUẬN
         }
 
         function writeWaitMetaJson(waitMetaFolder, baseName, maxInch, usedRects) {
-            var fileNameNoExtension = baseName + "_wait_" + String(maxInch).replace(".", "_");
+            var fileNameNoExtension = waitArtifactBaseName(baseName, maxInch);
             return writeWaitMetaJsonByFileName(waitMetaFolder, fileNameNoExtension, usedRects);
         }
 
@@ -1017,7 +1024,7 @@ KẾT LUẬN
                 if (!waitMetaFolder || !waitMetaFolder.exists) return;
 
                 var sizePart = String(maxInch).replace(".", "_");
-                var metaFile = new File(waitMetaFolder.fsName + "/" + baseName + "_wait_" + sizePart + ".json");
+                var metaFile = new File(waitMetaFolder.fsName + "/" + waitArtifactBaseName(baseName, maxInch) + ".json");
                 var legacyMetaFile = new File(waitMetaFolder.fsName + "/" + baseName + "wait" + sizePart + ".json");
 
                 if (metaFile.exists) {
@@ -1044,7 +1051,7 @@ KẾT LUẬN
             if (!waitFolder.exists) waitFolder.create();
             if (waitMetaFolder && !waitMetaFolder.exists) waitMetaFolder.create();
 
-            var baseName = RUN_WAIT_MODE ? WAIT_BASE_NAME : makeTimeFileName();
+            var baseName = RUN_WAIT_MODE ? WAIT_BASE_NAME : WAIT_FILE_PREFIX;
             var waitInfo = getWaitInfo(packer);
             var isWaitSave = (forceWaitSave === true) || (waitInfo && waitInfo.count > 0);
 
@@ -1059,7 +1066,7 @@ KẾT LUẬN
             var saveFolder = isWaitSave ? waitFolder : outFolder;
             var saveBaseName = baseName;
             if (isWaitSave) {
-                saveBaseName = baseName + "_wait_" + String(waitInfo.inch).replace(".", "_");
+                saveBaseName = waitArtifactBaseName(baseName, waitInfo.inch);
             }
 
             // When resuming wait mode, update wait-meta.json immediately to save current usedRects state
@@ -1089,7 +1096,7 @@ KẾT LUẬN
                 try {
                     // Merge usedRects from old JSON (if size changed) with new usedRects
                     var oldSizePart = String(WAIT_MAX_INCH).replace(".", "_");
-                    var oldMetaFileName = WAIT_BASE_NAME + "_wait_" + oldSizePart + ".json";
+                    var oldMetaFileName = waitArtifactBaseName(WAIT_BASE_NAME, WAIT_MAX_INCH) + ".json";
                     var oldMetaFile = new File(waitMetaFolder.fsName + "/" + oldMetaFileName);
 
                     if (oldMetaFile.exists && oldSizePart !== String(waitInfo.inch).replace(".", "_")) {
@@ -1107,7 +1114,7 @@ KẾT LUẬN
 
                 try {
                     // Merge note IDs from old file (if size changed) with new IDs
-                    var oldNoteBaseName = WAIT_BASE_NAME + "_wait_" + String(WAIT_MAX_INCH).replace(".", "_");
+                    var oldNoteBaseName = waitArtifactBaseName(WAIT_BASE_NAME, WAIT_MAX_INCH);
                     var oldNoteFile = new File(noteDoneFolder.fsName + "/" + oldNoteBaseName + ".txt");
 
                     if (oldNoteFile.exists && String(WAIT_MAX_INCH).replace(".", "_") !== String(waitInfo.inch).replace(".", "_")) {
@@ -1130,7 +1137,7 @@ KẾT LUẬN
             // If done mode (not wait) but came from wait resume, merge old note IDs into final note
             if (!isWaitSave && RUN_WAIT_MODE && WAIT_BASE_NAME && WAIT_MAX_INCH) {
                 try {
-                    var oldNoteBaseName = WAIT_BASE_NAME + "_wait_" + String(WAIT_MAX_INCH).replace(".", "_");
+                    var oldNoteBaseName = waitArtifactBaseName(WAIT_BASE_NAME, WAIT_MAX_INCH);
                     var oldIds = readNoteFileIds(noteDoneFolder, oldNoteBaseName);
                     if (oldIds && oldIds.length > 0) {
                         idListToWrite = oldIds.concat(idListToWrite);
@@ -1188,7 +1195,7 @@ KẾT LUẬN
             // After closing doc, cleanup old files if size changed during wait resume
             // (don't copy, just delete - merged data already written by writeDoneNoteFile)
             if (RUN_WAIT_MODE && isWaitSave && WAIT_BASE_NAME && WAIT_MAX_INCH) {
-                var oldFileBaseName = WAIT_BASE_NAME + "_wait_" + String(WAIT_MAX_INCH).replace(".", "_");
+                var oldFileBaseName = waitArtifactBaseName(WAIT_BASE_NAME, WAIT_MAX_INCH);
                 if (oldFileBaseName !== saveBaseName) {
                     $.writeln("=== CLEANUP OLD WAIT FILES ===");
                     $.writeln("Old: " + oldFileBaseName + " -> New: " + saveBaseName);
@@ -1242,8 +1249,7 @@ KẾT LUẬN
                                 var f = waitFilesInFolder[idx];
                                 if (!(f instanceof File)) continue;
                                 var fname = f.name;
-                                var fmatch = fname.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)\.ai$/i);
-                                if (fmatch && fmatch[1] === WAIT_BASE_NAME) {
+                                if (isWaitArtifactName(fname, WAIT_BASE_NAME)) {
                                     try { f.remove(); } catch (re) { }
                                 }
                             }
@@ -1258,8 +1264,7 @@ KẾT LUẬN
                                 var mf = metaFilesInFolder[jdx];
                                 if (!(mf instanceof File)) continue;
                                 var mfname = mf.name;
-                                var mmatch = mfname.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)\.json$/i);
-                                if (mmatch && mmatch[1] === WAIT_BASE_NAME) {
+                                if (isWaitArtifactName(mfname, WAIT_BASE_NAME)) {
                                     try { mf.remove(); } catch (me) { }
                                 }
                             }
@@ -1274,8 +1279,7 @@ KẾT LUẬN
                                 var nf = noteFilesInFolder[ndx];
                                 if (!(nf instanceof File)) continue;
                                 var nfname = nf.name;
-                                var nmatch = nfname.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)\.txt$/i);
-                                if (nmatch && nmatch[1] === WAIT_BASE_NAME) {
+                                if (isWaitArtifactName(nfname, WAIT_BASE_NAME)) {
                                     try { nf.remove(); } catch (ne) { }
                                 }
                             }
@@ -1300,8 +1304,7 @@ KẾT LUẬN
                                 var f2 = waitFilesInFolder2[idx2];
                                 if (!(f2 instanceof File)) continue;
                                 var fname2 = f2.name;
-                                var fmatch2 = fname2.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)\.ai$/i);
-                                if (fmatch2 && fmatch2[1] === WAIT_BASE_NAME && fname2 !== (saveBaseName + ".ai")) {
+                                if (isWaitArtifactName(fname2, WAIT_BASE_NAME) && fname2 !== (saveBaseName + ".ai")) {
                                     $.writeln("Deleting old wait .ai: " + fname2);
                                     try { f2.remove(); } catch (re2) { }
                                 }
@@ -1317,8 +1320,7 @@ KẾT LUẬN
                                 var mf2 = metaFilesInFolder2[jdx2];
                                 if (!(mf2 instanceof File)) continue;
                                 var mfname2 = mf2.name;
-                                var mmatch2 = mfname2.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)\.json$/i);
-                                if (mmatch2 && mmatch2[1] === WAIT_BASE_NAME && mfname2 !== (saveBaseName + ".json")) {
+                                if (isWaitArtifactName(mfname2, WAIT_BASE_NAME) && mfname2 !== (saveBaseName + ".json")) {
                                     $.writeln("Deleting old wait .json: " + mfname2);
                                     try { mf2.remove(); } catch (me2) { }
                                 }
@@ -1334,8 +1336,7 @@ KẾT LUẬN
                                 var nf2 = noteFilesInFolder2[ndx2];
                                 if (!(nf2 instanceof File)) continue;
                                 var nfname2 = nf2.name;
-                                var nmatch2 = nfname2.match(/^(.*)_wait_([0-9]+(?:_[0-9]+)?)\.txt$/i);
-                                if (nmatch2 && nmatch2[1] === WAIT_BASE_NAME && nfname2 !== (saveBaseName + ".txt")) {
+                                if (isWaitArtifactName(nfname2, WAIT_BASE_NAME) && nfname2 !== (saveBaseName + ".txt")) {
                                     $.writeln("Deleting old wait .txt: " + nfname2);
                                     try { nf2.remove(); } catch (ne2) { }
                                 }
@@ -1763,6 +1764,17 @@ KẾT LUẬN
             }
         }
 
+        function waitArtifactBaseName(baseName, maxInch) {
+            var sizePart = String(maxInch).replace(".", "_");
+            return (baseName === "wait" || baseName === "wait_holo") ? baseName + "_" + sizePart : baseName + "_wait_" + sizePart;
+        }
+
+        function isWaitArtifactName(fileName, baseName) {
+            var escapedBase = String(baseName).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            var separator = (baseName === "wait" || baseName === "wait_holo") ? "_" : "_wait_";
+            return new RegExp("^" + escapedBase + separator + "[0-9]+(?:_[0-9]+)?\\.(?:ai|json|txt)$", "i").test(String(fileName));
+        }
+
 
 
 
@@ -1810,22 +1822,33 @@ KẾT LUẬN
             imgCopy.selected = true;
             safeRedraw();
             fastSleep(1000);
+
+            logProcessStep("colorBalance", file, useInvert);
+            app.doScript("Adjust Color Balance Black", actionSet);
+            safeRedraw();
+            fastSleep(1000);
+            assertSelection("colorBalance", doc, 1);
+            debugStep("3. Adjust Color Balance Black", doc.selection[0]);
+
             logProcessStep("traceLazerSilhouette", file, useInvert);
             // This is intentionally the same sequence as Acrylic's
             // traceLazerSilhouette(): trace -> load Silhouettes -> redraw.
             var traceSource = doc.selection[0];
             var traceObj = traceSource.trace();
             app.redraw();
-            fastSleep(250);
+            $.sleep(2000);
             var tracingObject = traceObj.tracing;
+            // Use the built-in Illustrator preset directly. The local Action
+            // named Silhouettes only runs the default tracing command.
             var presetLoaded = tracingObject.tracingOptions.loadFromPreset("Silhouettes");
             if (presetLoaded !== true) {
-                throw new Error("Không tìm thấy Image Trace preset Silhouettes (Lazer).");
+                throw new Error("Không tìm thấy Image Trace preset Silhouettes.");
             }
-            fastSleep(250);
+            app.redraw();
+            $.sleep(800);
             // Match Acrylic debugLazerStep: select the active PluginItem before
             // pausing, so Illustrator can display its real Trace preset.
-            debugStep("3. Trace Lazer - Silhouettes", traceObj);
+            debugStep("4. Trace Lazer - Silhouettes", traceObj);
 
             logProcessStep("expandTracing", file, useInvert);
             var expandedTrace = tracingObject.expandTracing();
@@ -1834,7 +1857,7 @@ KẾT LUẬN
             if (expandedTrace === null) {
                 throw new Error("Không thể Expand Image Trace Lazer.");
             }
-            debugStep("4. Expand Trace Lazer", expandedTrace);
+            debugStep("5. Expand Trace Lazer", expandedTrace);
 
             var expandedSelection = doc.selection;
 
@@ -3232,3 +3255,4 @@ KẾT LUẬN
             return base + ext;
         }
     })();
+
