@@ -695,7 +695,7 @@ function runTool(command: ToolCommand) {
     const stickerRuntimePath = path.join(toolDir, '.runtime', stickerHolo ? 'sticker-holo-runtime.jsx' : 'sticker-vinyl-runtime.jsx');
     mkdirSync(path.dirname(stickerRuntimePath), { recursive: true });
     const stickerPaths = { root: stickerHolo ? stickerHoloRoot : stickerRoot, template: folderPaths.template, images: folderPaths.Images, done: folderPaths.imgaes_done, error: folderPaths.images_error, wait: folderPaths.wait, waitMeta: folderPaths.wait_meta, noteDone: folderPaths.note_done, noteWork: folderPaths.note_work };
-    const source = readFileSync(path.join(toolDir, 'scripts', 'sticker-vinyl.jsx'), 'utf8');
+    const source = readFileSync(path.join(toolDir, 'scripts', 'sticker-stable.jsx'), 'utf8');
     const stickerSettings = loadStickerSettings();
     const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_TEMPLATE_FILE: loadStickerTemplatePath(), CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork, CODEX_STICKER_OUTPUT_AI_DIR: folderPaths.output_ai }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_HOLO_MODE = ${stickerHolo};\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};`;
     writeFileSync(stickerRuntimePath, prefix + '\n' + source, 'utf8');
