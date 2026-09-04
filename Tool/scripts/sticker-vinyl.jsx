@@ -131,6 +131,7 @@ KẾT LUẬN
         var MARGIN_PT = MARGIN_MM * 2.834645669;
         var ALLOW_ROTATE = true;
         var ACTION_SET = "My set";
+        var ACTION_SILHOUETTES = "Silhouettes";
         var ACTION_MERGE = "Merge";
         var ACTION_UNITE = "Unite";
         var AUTO_LAYER_PREFIX = "__AUTO_BATCH__ ";
@@ -1831,19 +1832,15 @@ KẾT LUẬN
             debugStep("3. Adjust Color Balance Black", doc.selection[0]);
 
             logProcessStep("traceLazerSilhouette", file, useInvert);
-            // This is intentionally the same sequence as Acrylic's
-            // traceLazerSilhouette(): trace -> load Silhouettes -> redraw.
-            var traceSource = doc.selection[0];
-            var traceObj = traceSource.trace();
+            app.doScript(ACTION_SILHOUETTES, actionSet);
             app.redraw();
             $.sleep(2000);
-            var tracingObject = traceObj.tracing;
-            // Use the built-in Illustrator preset directly. The local Action
-            // named Silhouettes only runs the default tracing command.
-            var presetLoaded = tracingObject.tracingOptions.loadFromPreset("Silhouettes");
-            if (presetLoaded !== true) {
-                throw new Error("Không tìm thấy Image Trace preset Silhouettes.");
+            assertSelection("trace Silhouettes", doc, 1);
+            var traceObj = doc.selection[0];
+            if (!traceObj.tracing) {
+                throw new Error("Action My set > Silhouettes không tạo Image Trace.");
             }
+            var tracingObject = traceObj.tracing;
             app.redraw();
             $.sleep(800);
             // Match Acrylic debugLazerStep: select the active PluginItem before
