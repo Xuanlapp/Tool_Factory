@@ -131,7 +131,6 @@ KẾT LUẬN
         var MARGIN_PT = MARGIN_MM * 2.834645669;
         var ALLOW_ROTATE = true;
         var ACTION_SET = "My set";
-        var ACTION_SILHOUETTES = "Silhouettes";
         var ACTION_MERGE = "Merge";
         var ACTION_UNITE = "Unite";
         var AUTO_LAYER_PREFIX = "__AUTO_BATCH__ ";
@@ -1827,16 +1826,19 @@ KẾT LUẬN
 
 
             logProcessStep("trace", file, useInvert);
-            app.doScript(ACTION_SILHOUETTES, actionSet);
+            var traceObj = doc.selection[0].trace();
             safeRedraw();
             fastSleep(2000);
-            assertSelection("trace Silhouettes", doc, 1);
-            var traceObj = doc.selection[0];
-            if (!traceObj.tracing) throw new Error("Action My set > Silhouettes không tạo Image Trace.");
+            var tracingObject = traceObj.tracing;
+            var presetLoaded = tracingObject.tracingOptions.loadFromPreset("Silhouettes");
+            if (presetLoaded !== true) throw new Error("Không tìm thấy Image Trace preset Silhouettes.");
+            tracingObject.tracingOptions.ignoreWhite = true;
+            safeRedraw();
+            fastSleep(800);
             debugStep("4. Trace Silhouettes");
 
             logProcessStep("expandTracing", file, useInvert);
-            traceObj.tracing.expandTracing();
+            tracingObject.expandTracing();
             fastSleep(3000);
             safeRedraw();
             debugStep("5. Expand Tracing");

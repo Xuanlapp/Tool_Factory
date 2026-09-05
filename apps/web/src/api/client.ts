@@ -1,9 +1,10 @@
 import type { FolderFileEntry } from './types';
 
 const isHoloProduct = window.location.pathname === '/holo' || window.location.pathname.startsWith('/holo/');
+const isLabelProduct = window.location.pathname === '/label' || window.location.pathname.startsWith('/label/');
 export const isStickerHoloProduct = window.location.pathname === '/sticker-holo' || window.location.pathname.startsWith('/sticker-holo/');
 export const isStickerProduct = window.location.pathname === '/sticker' || window.location.pathname.startsWith('/sticker/');
-export const apiBase = import.meta.env.VITE_ACRYLIC_API_BASE ?? (isHoloProduct ? '/api/v1/holo' : isStickerHoloProduct ? '/api/v1/sticker-holo' : isStickerProduct ? '/api/v1/sticker' : '/api/v1');
+export const apiBase = import.meta.env.VITE_ACRYLIC_API_BASE ?? (isLabelProduct ? '/api/v1/label' : isHoloProduct ? '/api/v1/holo' : isStickerHoloProduct ? '/api/v1/sticker-holo' : isStickerProduct ? '/api/v1/sticker' : '/api/v1');
 export const demoMode = String(import.meta.env.VITE_DEMO_MODE ?? '').toLowerCase() === 'true';
 const vietnamTimeZone = 'Asia/Ho_Chi_Minh';
 

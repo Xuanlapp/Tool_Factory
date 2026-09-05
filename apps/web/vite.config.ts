@@ -36,7 +36,7 @@ function fixVietnameseMojibake(value: unknown): unknown {
 }
 
 type RunnerStatus = 'idle' | 'running' | 'error';
-type ToolCommand = 'start' | 'all' | 'check' | 'test' | 'sticker';
+type ToolCommand = 'start' | 'all' | 'check' | 'test' | 'sticker' | 'label';
 type ExportAssetKind = 'front' | 'back' | 'lazer';
 type RunKind = 'tool' | 'export' | 'setup';
 type ToolStep = { index: number; total: number; step: string; fileName: string; status: 'running' | 'success' | 'error'; message: string };
@@ -60,6 +60,19 @@ const factoryRoot = process.env.ACRYLIC_FACTORY_ROOT ?? 'D:/FFACTORY/Arcylic';
 const appRoot = process.env.ACRYLIC_APP_ROOT ?? factoryRoot;
 const currentSetupVersion = '2026-09-03.1';
 const toolDir = path.join(appRoot, 'Tool');
+const acrylicTestSettingsPath = path.join(factoryRoot, '.runtime', 'test-folder-settings.json');
+function loadAcrylicTestImagesDir() {
+  try {
+    const saved = JSON.parse(readFileSync(acrylicTestSettingsPath, 'utf8')) as { imagesDir?: unknown };
+    if (typeof saved.imagesDir === 'string' && saved.imagesDir.trim()) return saved.imagesDir;
+  } catch {}
+  return path.join(factoryRoot, 'Test', 'Images');
+}
+function saveAcrylicTestImagesDir(imagesDir: string) {
+  mkdirSync(path.dirname(acrylicTestSettingsPath), { recursive: true });
+  writeFileSync(acrylicTestSettingsPath, JSON.stringify({ imagesDir }, null, 2), 'utf8');
+}
+let acrylicTestImagesDir = loadAcrylicTestImagesDir();
 const toolStatePath = path.join(factoryRoot, '.runtime', 'tool-ui-state.json');
 const operationRuntimeDir = path.join(factoryRoot, '.runtime', 'operations');
 const operationRunnerPath = path.join(appRoot, 'scripts', 'tool-operation-runner.mjs');
@@ -106,6 +119,21 @@ const defaultHoloFolderPaths: Record<string, string> = {
   // Only its input, wait, error, done, and output folders are isolated.
   template: path.join(factoryRoot, 'template'),
 };
+// Development keeps Label beside Acrylic; installed apps keep its working data inside the factory folder.
+const adjacentLabelRoot = path.join(path.dirname(factoryRoot), 'Label');
+const labelRoot = existsSync(adjacentLabelRoot) ? adjacentLabelRoot : path.join(factoryRoot, 'Label');
+const defaultLabelFolderPaths: Record<string, string> = {
+  Images: path.join(labelRoot, 'File_Label'),
+  images_error: path.join(labelRoot, 'Label_error'),
+  images_processed: path.join(labelRoot, 'Label_done'),
+  imgaes_done: path.join(labelRoot, 'Label_done'),
+  wait: path.join(labelRoot, 'wait'),
+  output_ai: path.join(labelRoot, 'output_ai'),
+  output_front: path.join(labelRoot, 'output_front'),
+  output_back: path.join(labelRoot, 'output_back'),
+  output_lazer: path.join(labelRoot, 'output_lazer'),
+  template: path.join(labelRoot, 'Template'),
+};
 const externalStickerRoot = path.join(factoryRoot, '..', 'Sticker Vinyl');
 const bundledStickerRoot = path.join(factoryRoot, 'Sticker Vinyl');
 const stickerRoot = existsSync(externalStickerRoot) ? externalStickerRoot : bundledStickerRoot;
@@ -143,6 +171,7 @@ const defaultStickerHoloFolderPaths: Record<string, string> = {
   note_done: path.join(stickerHoloRoot, 'note_done'),
   note_work: path.join(stickerHoloRoot, 'note_work'),
 };
+const labelFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-label.json');
 const stickerFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-sticker.json');
 const stickerHoloFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settings-sticker-holo.json');
 const stickerSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-settings.json');
@@ -150,9 +179,9 @@ const stickerHoloSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-holo
 const stickerTemplateSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-template-settings.json');
 const stickerHoloTemplateSettingsPath = path.join(factoryRoot, '.runtime', 'sticker-holo-template-settings.json');
 function isStickerProduct(product: string) { return product === 'sticker' || product === 'sticker-holo'; }
-function folderSettingsFile(product = 'acrylic') { return product === 'holo' ? holoFolderSettingsPath : product === 'sticker-holo' ? stickerHoloFolderSettingsPath : product === 'sticker' ? stickerFolderSettingsPath : folderSettingsPath; }
-function defaultPathsFor(product = 'acrylic') { return product === 'holo' ? defaultHoloFolderPaths : product === 'sticker-holo' ? defaultStickerHoloFolderPaths : product === 'sticker' ? defaultStickerFolderPaths : defaultFolderPaths; }
-function defaultFolderRootFor(product = 'acrylic') { return product === 'sticker-holo' ? stickerHoloRoot : product === 'sticker' ? stickerRoot : factoryRoot; }
+function folderSettingsFile(product = 'acrylic') { return product === 'label' ? labelFolderSettingsPath : product === 'holo' ? holoFolderSettingsPath : product === 'sticker-holo' ? stickerHoloFolderSettingsPath : product === 'sticker' ? stickerFolderSettingsPath : folderSettingsPath; }
+function defaultPathsFor(product = 'acrylic') { return product === 'label' ? defaultLabelFolderPaths : product === 'holo' ? defaultHoloFolderPaths : product === 'sticker-holo' ? defaultStickerHoloFolderPaths : product === 'sticker' ? defaultStickerFolderPaths : defaultFolderPaths; }
+function defaultFolderRootFor(product = 'acrylic') { return product === 'label' ? labelRoot : product === 'sticker-holo' ? stickerHoloRoot : product === 'sticker' ? stickerRoot : factoryRoot; }
 function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; return { ...defaultPathsFor(product), ...saved }; } catch { return { ...defaultPathsFor(product) }; } }
 function saveFolderPaths(next: Record<string, string>, product = 'acrylic') { const settingsPath = folderSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 type CheckSettings = { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number; jsxBatchSize: number; itemGapCm: number };
@@ -235,7 +264,7 @@ const initialFolderNormalization = normalizeSavedFolderPaths(loadFolderPaths());
 let folderPaths = initialFolderNormalization.normalizedPaths;
 let activeProduct = 'acrylic';
 function activateProduct(product: string) {
-  activeProduct = product === 'holo' || product === 'sticker' || product === 'sticker-holo' ? product : 'acrylic';
+  activeProduct = product === 'holo' || product === 'sticker' || product === 'sticker-holo' || product === 'label' ? product : 'acrylic';
   const normalized = normalizeSavedFolderPaths(loadFolderPaths(activeProduct));
   folderPaths = normalized.normalizedPaths;
   folderPathWarnings = normalized.warnings;
@@ -541,7 +570,7 @@ function launchPersistentOperation(run: ToolRun, executable: string, args: strin
   const resultPath = path.join(operationRuntimeDir, `${run.id}.result.json`);
   const specPath = path.join(operationRuntimeDir, `${run.id}.spec.json`);
   writeFileSync(logPath, '', 'utf8');
-  const operationEnv = { ...process.env, ...env, ACRYLIC_FACTORY_ROOT: factoryRoot, ACRYLIC_IMAGES_DIR: folderPaths.Images, ACRYLIC_IMAGES_ERROR_DIR: folderPaths.images_error, ACRYLIC_IMAGES_DONE_DIR: folderPaths.imgaes_done, ACRYLIC_WAIT_DIR: folderPaths.wait, ACRYLIC_OUTPUT_AI_DIR: folderPaths.output_ai, ACRYLIC_OUTPUT_FRONT_DIR: folderPaths.output_front, ACRYLIC_OUTPUT_BACK_DIR: folderPaths.output_back, ACRYLIC_OUTPUT_LAZER_DIR: folderPaths.output_lazer, ACRYLIC_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_UVDTF.ai'), ACRYLIC_LAZER_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_Lazer.ai'), ACRYLIC_CHECK_IMAGE_SIZE: String(checkSettings.checkImageSize), ACRYLIC_CHECK_TWO_SIDE_FACE_OFFSET: String(checkSettings.checkTwoSideFaceOffset), ACRYLIC_CHECK_FACE_TOLERANCE_CM: String(checkSettings.faceToleranceCm), ACRYLIC_CHECK_CUT_TOLERANCE_CM: String(checkSettings.cutToleranceCm), ACRYLIC_PACK_GAP_CM: String(checkSettings.itemGapCm) };
+  const operationEnv = { ...process.env, ACRYLIC_FACTORY_ROOT: factoryRoot, ACRYLIC_IMAGES_DIR: folderPaths.Images, ACRYLIC_IMAGES_ERROR_DIR: folderPaths.images_error, ACRYLIC_IMAGES_DONE_DIR: folderPaths.imgaes_done, ACRYLIC_WAIT_DIR: folderPaths.wait, ACRYLIC_OUTPUT_AI_DIR: folderPaths.output_ai, ACRYLIC_OUTPUT_FRONT_DIR: folderPaths.output_front, ACRYLIC_OUTPUT_BACK_DIR: folderPaths.output_back, ACRYLIC_OUTPUT_LAZER_DIR: folderPaths.output_lazer, ACRYLIC_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_UVDTF.ai'), ACRYLIC_LAZER_TEMPLATE_PATH: path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_Lazer.ai'), ACRYLIC_CHECK_IMAGE_SIZE: String(checkSettings.checkImageSize), ACRYLIC_CHECK_TWO_SIDE_FACE_OFFSET: String(checkSettings.checkTwoSideFaceOffset), ACRYLIC_CHECK_FACE_TOLERANCE_CM: String(checkSettings.faceToleranceCm), ACRYLIC_CHECK_CUT_TOLERANCE_CM: String(checkSettings.cutToleranceCm), ACRYLIC_PACK_GAP_CM: String(checkSettings.itemGapCm), ...env };
   if (executable === 'cscript.exe' && /clear-wait-printed-layers\.runtime\.jsx$/i.test(String(args[2] ?? ''))) {
     const source = readFileSync(path.join(toolDir, 'scripts', 'clear-wait-printed-layers.jsx'), 'utf8');
     writeFileSync(path.join(toolDir, 'scripts', 'clear-wait-printed-layers.runtime.jsx'), ['var CODEX_WAIT_PRINTED_SOURCE_PATH = ' + JSON.stringify(String((operationEnv as Record<string, string>).ACRYLIC_WAIT_PRINTED_SOURCE_PATH ?? '').replace(/\\/g, '/')) + ';', 'var CODEX_WAIT_PRINTED_RESULT_PATH = ' + JSON.stringify(String((operationEnv as Record<string, string>).ACRYLIC_WAIT_PRINTED_RESULT_PATH ?? '').replace(/\\/g, '/')) + ';', 'var CODEX_WAIT_PRINTED_MANIFEST_PATH = ' + JSON.stringify(String((operationEnv as Record<string, string>).ACRYLIC_WAIT_PRINTED_MANIFEST_PATH ?? '').replace(/\\/g, '/')) + ';', source].join('\n'), 'utf8');
@@ -690,6 +719,30 @@ function runExport(outputAiRelativePath: string, assets: ExportAssetKind[]) {
 
 function runTool(command: ToolCommand) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
+  if (command === 'label') {
+    const bundledLabelRoot = path.join(appRoot, 'Label');
+    const labelSourcePath = existsSync(path.join(bundledLabelRoot, 'Tool', 'Label.jsx')) ? path.join(bundledLabelRoot, 'Tool', 'Label.jsx') : path.join(labelRoot, 'Tool', 'Label.jsx');
+    if (!existsSync(labelSourcePath)) throw new Error('Không tìm thấy Tool/Label.jsx.');
+    const configuredTemplatePath = path.join(folderPaths.template, 'Template Labell FBA.ai');
+    const bundledTemplatePath = path.join(bundledLabelRoot, 'Template', 'Template Labell FBA.ai');
+    if (!existsSync(configuredTemplatePath) && existsSync(bundledTemplatePath)) {
+      mkdirSync(path.dirname(configuredTemplatePath), { recursive: true });
+      fs.copyFileSync(bundledTemplatePath, configuredTemplatePath);
+    }
+    if (!existsSync(configuredTemplatePath)) throw new Error('Không tìm thấy Template Labell FBA.ai.');
+    const labelRuntimePath = path.join(factoryRoot, '.runtime', 'label-runtime.jsx');
+    const source = readFileSync(labelSourcePath, 'utf8')
+      .replace('new Folder("D:/n8n/Label/File_Label")', `new Folder(${JSON.stringify(folderPaths.Images.replace(/\\/g, '/'))})`)
+      .replace('new Folder("D:/n8n/Label/Label_done")', `new Folder(${JSON.stringify(folderPaths.imgaes_done.replace(/\\/g, '/'))})`)
+      .replace('new Folder("D:/n8n/Label/Label_error")', `new Folder(${JSON.stringify(folderPaths.images_error.replace(/\\/g, '/'))})`)
+      .replace('new Folder("D:/n8n/Label/output_ai")', `new Folder(${JSON.stringify(folderPaths.output_ai.replace(/\\/g, '/'))})`)
+      .replace('new File("D:/n8n/Label/Template/Template Labell FBA.ai")', `new File(${JSON.stringify(configuredTemplatePath.replace(/\\/g, '/'))})`);
+    mkdirSync(path.dirname(labelRuntimePath), { recursive: true });
+    writeFileSync(labelRuntimePath, source, 'utf8');
+    const run: ToolRun = { id: `label-${Date.now()}`, kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool Label: xử lý PDF trong ' + folderPaths.Images] };
+    launchPersistentOperation(run, 'cscript.exe', ['//nologo', path.join(toolDir, 'scripts', 'launch-illustrator-and-run.vbs'), labelRuntimePath]);
+    return { ok: true, message: 'Đã chạy Tool Label.', run: activeRun };
+  }
   if (command === 'sticker') {
     const stickerHolo = activeProduct === 'sticker-holo';
     const stickerRuntimePath = path.join(toolDir, '.runtime', stickerHolo ? 'sticker-holo-runtime.jsx' : 'sticker-vinyl-runtime.jsx');
@@ -715,6 +768,88 @@ function runTool(command: ToolCommand) {
   return { ok: true, message: 'Đã chạy Tool ' + command + '.', run: activeRun };
 }
 
+function listAcrylicTestImages() {
+  mkdirSync(acrylicTestImagesDir, { recursive: true });
+  return readdirSync(acrylicTestImagesDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && path.extname(entry.name).toLowerCase() === '.png')
+    .map((entry) => {
+      const filePath = path.join(acrylicTestImagesDir, entry.name);
+      const info = statSync(filePath);
+      return { name: entry.name, sizeBytes: info.size, modifiedAt: info.mtime.toISOString() };
+    })
+    .sort((a, b) => a.name.localeCompare(b.name, 'en', { numeric: true }));
+}
+
+function runAcrylicTest() {
+  if (activeRun?.status === 'running') return { ok: false, message: 'Đang có Tool hoặc Export chạy, vui lòng chờ xong.', run: activeRun };
+  const files = listAcrylicTestImages();
+  if (!files.length) return { ok: false, message: 'Folder Test\\Images chưa có PNG để test.', run: null };
+  const run: ToolRun = { id: `acrylic-test-${Date.now()}`, kind: 'tool', command: 'test', status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: [`> chạy Test Acrylic riêng: ${files[0].name}`, `> folder ảnh test: ${acrylicTestImagesDir}`] };
+  launchPersistentOperation(run, nodeExecutable, [path.join(toolDir, 'dist-bundle', 'test-import-one-image.cjs')], {
+    ACRYLIC_IMAGES_DIR: acrylicTestImagesDir,
+    ACRYLIC_TEST_IMPORT_ONE_IMAGE: '1',
+    ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000',
+    ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0',
+    ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1',
+  });
+  return { ok: true, message: `Đang test riêng ảnh: ${files[0].name}`, run: activeRun };
+}
+
+function setAcrylicTestImagesDir(inputPath: string) {
+  if (activeRun?.status === 'running') return { ok: false, message: 'Không thể đổi folder test khi Tool hoặc Export đang chạy.' };
+  const normalized = normalizeFolderPath(inputPath);
+  if (!normalized.normalizedPath || normalized.warning) return { ok: false, message: normalized.warning ?? 'Đường dẫn folder test không hợp lệ.' };
+  if (path.resolve(normalized.normalizedPath).toLowerCase() === path.resolve(folderPaths.Images).toLowerCase()) return { ok: false, message: 'Folder test phải tách riêng, không thể dùng Images sản xuất.' };
+  const health = canAccessFolder(normalized.normalizedPath);
+  if (!health.reachable) return { ok: false, message: health.warning ?? 'Không thể truy cập folder test mới.' };
+  acrylicTestImagesDir = normalized.normalizedPath;
+  saveAcrylicTestImagesDir(acrylicTestImagesDir);
+  return { ok: true, message: 'Đã đổi folder ảnh test. Template Acrylic vẫn được giữ nguyên.', folderPath: acrylicTestImagesDir };
+}
+
+async function runAcrylicTestFromImage(inputPath: string, sideCount: number) {
+  if (activeRun?.status === 'running') return { ok: false, message: 'Đang có Tool hoặc Export chạy, vui lòng chờ xong.', run: activeRun };
+  const value = inputPath.trim();
+  if (!value) return { ok: false, message: 'Hãy nhập đường dẫn PNG hoặc link Google Drive.', run: null };
+  let sourcePath = '';
+  let downloadedImage: Buffer | null = null;
+  if (/^https?:\/\//i.test(value)) {
+    let downloadUrl = value;
+    const googleFileId = value.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i)?.[1] ?? new URL(value).searchParams.get('id');
+    if (googleFileId) downloadUrl = `https://drive.usercontent.google.com/download?id=${encodeURIComponent(googleFileId)}&export=download&confirm=t`;
+    let response: Response;
+    try { response = await fetch(downloadUrl, { redirect: 'follow' }); } catch { return { ok: false, message: 'Không tải được link ảnh. Kiểm tra lại kết nối mạng hoặc quyền chia sẻ Google Drive.', run: null }; }
+    if (!response.ok) return { ok: false, message: `Không tải được link ảnh (HTTP ${response.status}). Hãy đặt quyền link Google Drive là Ai có link đều xem được.`, run: null };
+    const content = Buffer.from(await response.arrayBuffer());
+    const isPng = content.length >= 8 && content.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+    if (!isPng) return { ok: false, message: 'Link không trả về file PNG. Hãy dùng link Google Drive công khai của một ảnh PNG.', run: null };
+    if (content.length > 100 * 1024 * 1024) return { ok: false, message: 'Ảnh từ link lớn hơn 100 MB nên không thể test.', run: null };
+    downloadedImage = content;
+  } else {
+    sourcePath = path.resolve(value);
+    if (!existsSync(sourcePath) || !statSync(sourcePath).isFile()) return { ok: false, message: 'Không tìm thấy file ảnh theo đường dẫn đã nhập.', run: null };
+    if (path.extname(sourcePath).toLowerCase() !== '.png') return { ok: false, message: 'Chỉ hỗ trợ file PNG để test.', run: null };
+  }
+  const normalizedSideCount = sideCount === 2 ? 2 : 1;
+  mkdirSync(acrylicTestImagesDir, { recursive: true });
+  // Keep the source intact; only a dedicated test copy receives the side/qty metadata.
+  const now = new Date();
+  const stamp = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, '0'), String(now.getDate()).padStart(2, '0')].join('')
+    + '-' + [String(now.getHours()).padStart(2, '0'), String(now.getMinutes()).padStart(2, '0'), String(now.getSeconds()).padStart(2, '0')].join('');
+  const testPath = path.join(acrylicTestImagesDir, `test-${stamp}_${normalizedSideCount}-side_qty_1.png`);
+  if (downloadedImage) writeFileSync(testPath, downloadedImage); else fs.copyFileSync(sourcePath, testPath);
+  const run: ToolRun = { id: `acrylic-test-${Date.now()}`, kind: 'tool', command: 'test', status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: [`> chạy Test Acrylic nhanh: ${downloadedImage ? 'Google Drive link' : path.basename(sourcePath)}`, `> side=${normalizedSideCount} | qty=1`, `> bản sao test: ${testPath}`] };
+  launchPersistentOperation(run, nodeExecutable, [path.join(toolDir, 'dist-bundle', 'test-import-one-image.cjs')], {
+    ACRYLIC_IMAGES_DIR: acrylicTestImagesDir,
+    ACRYLIC_TEST_IMAGE_PATH: testPath,
+    ACRYLIC_TEST_IMPORT_ONE_IMAGE: '1',
+    ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000',
+    ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0',
+    ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1',
+  });
+  return { ok: true, message: `Đã tạo bản sao test và đang chạy: ${path.basename(testPath)}`, run: activeRun };
+}
+
 ensureOperationMonitor();
 async function scanFolder(root: string): Promise<FileEntry[]> {
   const files: FileEntry[] = [];
@@ -732,13 +867,14 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
       if (!entry.isFile() || entry.name === '.error-metadata.json' || lowerName.endsWith('.manifest.json') || lowerName === 'thumbs.db' || lowerName === 'desktop.ini' || lowerName === '.ds_store' || lowerName.startsWith('~') || lowerName.endsWith('.tmp') || lowerName.endsWith('.bak') || lowerName.endsWith('.lock')) continue;
       const rootKey = Object.entries(folderPaths).find(([, folder]) => path.resolve(folder).toLowerCase() === path.resolve(root).toLowerCase())?.[0];
       const extension = path.extname(entry.name).toLowerCase();
+      if (activeProduct === 'label' && ['Images', 'images_error', 'images_processed', 'imgaes_done'].includes(rootKey ?? '') && extension !== '.pdf') continue;
       if (isStickerProduct(activeProduct) && (rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed')) {
         if (!['.png', '.jpg', '.jpeg', '.tif', '.tiff', '.bmp', '.psd'].includes(extension)) continue;
-      } else if ((rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed') && extension !== '.png') continue;
+      } else if (activeProduct !== 'label' && (rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed') && extension !== '.png') continue;
       // Illustrator writes this temporary file while Save As is in progress.
       // It is not a usable wait sheet and must never appear in the queue.
       if (rootKey === 'wait' && (extension !== '.ai' || lowerName.endsWith('.saving.ai') || (isStickerProduct(activeProduct) ? !/(?:_wait_|^wait(?:_holo)?_[0-9]+(?:_[0-9]+)?\.ai$)/i.test(entry.name) : !/^wait_\d+(?:-\d+)?\.ai$/i.test(entry.name)))) continue;
-      if (rootKey === 'output_ai' && (extension !== '.ai' || (!isStickerProduct(activeProduct) && !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
+      if (rootKey === 'output_ai' && (extension !== '.ai' || (activeProduct === 'acrylic' && !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
       if (rootKey === 'output_front' && (extension !== '.png' || !/_front\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_back' && (extension !== '.png' || !/_back\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_lazer' && (extension !== '.ai' || !/_lazer\.ai$/i.test(entry.name))) continue;
@@ -875,6 +1011,7 @@ function serveFile(url: URL, response: import('node:http').ServerResponse) {
   if (ext === '.png') response.setHeader('Content-Type', 'image/png');
   else if (ext === '.jpg' || ext === '.jpeg') response.setHeader('Content-Type', 'image/jpeg');
   else if (ext === '.webp') response.setHeader('Content-Type', 'image/webp');
+  else if (ext === '.pdf') { response.setHeader('Content-Type', 'application/pdf'); response.setHeader('Content-Disposition', 'inline; filename="' + encodeURIComponent(path.basename(resolvedFile)) + '"'); }
   else { response.statusCode = 415; response.end('PREVIEW_NOT_SUPPORTED'); return true; }
   try {
     const info = statSync(resolvedFile);
@@ -997,9 +1134,9 @@ function localFilesystemApi(): Plugin {
       server.middlewares.use(async (request, response, next) => {
         const url = new URL(request.url ?? '/', 'http://localhost');
         if (!url.pathname.startsWith('/api/v1/')) return next();
-        const productMatch = url.pathname.match(/^\/api\/v1\/(holo|sticker|sticker-holo)\//);
+        const productMatch = url.pathname.match(/^\/api\/v1\/(label|holo|sticker|sticker-holo)(?:\/|$)/);
         const product = productMatch?.[1] ?? 'acrylic';
-        if (productMatch) url.pathname = url.pathname.replace(`/api/v1/${product}/`, '/api/v1/');
+        if (productMatch) url.pathname = url.pathname.replace(new RegExp(`^/api/v1/${product}(?:/|$)`), '/api/v1/');
         activateProduct(product);
         if (serveThumbnail(url, response)) return;
         if (serveFile(url, response)) return;
@@ -1023,6 +1160,42 @@ function localFilesystemApi(): Plugin {
         if (url.pathname === '/api/v1/setup/run') {
           if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
           return json(response, runMachineSetup());
+        }
+        if (url.pathname === '/api/v1/test/images') {
+          const templatePath = path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_UVDTF.ai');
+          return json(response, { folderPath: acrylicTestImagesDir, templatePath, files: listAcrylicTestImages() });
+        }
+        if (url.pathname === '/api/v1/test/run') {
+          if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
+          return json(response, runAcrylicTest());
+        }
+        if (url.pathname === '/api/v1/test/quick-run') {
+          if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
+          let body = '';
+          request.on('data', (chunk) => { body += String(chunk); });
+          request.on('end', async () => {
+            try {
+              const payload = JSON.parse(body || '{}') as { imagePath?: unknown; sideCount?: unknown };
+              return json(response, await runAcrylicTestFromImage(String(payload.imagePath ?? ''), Number(payload.sideCount) === 2 ? 2 : 1));
+            } catch (error) {
+              return json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể chạy test nhanh.' }, 400);
+            }
+          });
+          return;
+        }
+        if (url.pathname === '/api/v1/test/folder') {
+          if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
+          let body = '';
+          request.on('data', (chunk) => { body += String(chunk); });
+          request.on('end', () => {
+            try {
+              const payload = JSON.parse(body || '{}') as { folderPath?: unknown };
+              return json(response, setAcrylicTestImagesDir(String(payload.folderPath ?? '')));
+            } catch (error) {
+              return json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể lưu folder test.' }, 400);
+            }
+          });
+          return;
         }
         if (url.pathname === '/api/v1/tool/status') return json(response, toolStatus());
         if (url.pathname === '/api/v1/tool/stop') {
@@ -1106,7 +1279,7 @@ function localFilesystemApi(): Plugin {
               return;
             }
             const command = payload.command;
-            if (!['start', 'all', 'check', 'test', 'sticker'].includes(String(command))) {
+            if (!['start', 'all', 'check', 'test', 'sticker', 'label'].includes(String(command))) {
               json(response, { ok: false, message: 'Lệnh Tool không hợp lệ.', run: toolStatus().run }, 400);
               return;
             }
@@ -1223,10 +1396,35 @@ function localFilesystemApi(): Plugin {
                 for (const [key, targetPath] of topLevelMoves) { moveFolderContents(folderPaths[key], targetPath); movedFolderCount += 1; }
               }
               let templateCopied = false;
-              if (isStickerProduct(activeProduct)) {
+              if (activeProduct === 'acrylic' || activeProduct === 'holo') {
+                const bundledTemplateRoot = path.join(appRoot, 'AcrylicTemplate');
+                const templateFiles = ['Template_UVDTF.ai', 'Template_Lazer.ai'];
+                for (const templateFile of templateFiles) {
+                  const targetTemplatePath = path.join(nextPaths.template, templateFile);
+                  const bundledPath = path.join(bundledTemplateRoot, templateFile);
+                  const sourceTemplatePath = existsSync(bundledPath) ? bundledPath : path.join(factoryRoot, 'template', templateFile);
+                  if (!existsSync(targetTemplatePath) && existsSync(sourceTemplatePath)) {
+                    fs.copyFileSync(sourceTemplatePath, targetTemplatePath);
+                    templateCopied = true;
+                  }
+                }
+              } else if (activeProduct === 'label') {
+                const targetTemplatePath = path.join(nextPaths.template, 'Template Labell FBA.ai');
+                const bundledTemplatePath = path.join(appRoot, 'Label', 'Template', 'Template Labell FBA.ai');
+                // The installer carries its own template; setup copies it and never moves an external file.
+                const sourceTemplatePath = existsSync(bundledTemplatePath)
+                  ? bundledTemplatePath
+                  : path.join(labelRoot, 'Template', 'Template Labell FBA.ai');
+                if (!existsSync(targetTemplatePath) && existsSync(sourceTemplatePath)) {
+                  fs.copyFileSync(sourceTemplatePath, targetTemplatePath);
+                  templateCopied = true;
+                }
+              } else if (isStickerProduct(activeProduct)) {
                 const targetTemplatePath = path.join(nextPaths.template, 'template_saved.ai');
-                if (!existsSync(targetTemplatePath) && existsSync(stickerSharedTemplatePath)) {
-                  fs.copyFileSync(stickerSharedTemplatePath, targetTemplatePath);
+                const bundledStickerTemplatePath = path.join(appRoot, 'StickerTemplate', 'template_saved.ai');
+                const sourceStickerTemplatePath = existsSync(bundledStickerTemplatePath) ? bundledStickerTemplatePath : stickerSharedTemplatePath;
+                if (!existsSync(targetTemplatePath) && existsSync(sourceStickerTemplatePath)) {
+                  fs.copyFileSync(sourceStickerTemplatePath, targetTemplatePath);
                   templateCopied = true;
                 }
                 if (existsSync(targetTemplatePath)) saveStickerTemplatePath(targetTemplatePath);
@@ -1236,7 +1434,7 @@ function localFilesystemApi(): Plugin {
               cachedSnapshot = null;
               cacheExpiresAt = 0;
               saveFolderPaths(folderPaths, activeProduct);
-              const templateMessage = templateCopied ? ' Đã thêm template_saved.ai.' : '';
+              const templateMessage = templateCopied ? (activeProduct === 'label' ? ' Đã thêm Template Labell FBA.ai.' : activeProduct === 'acrylic' || activeProduct === 'holo' ? ' Đã thêm Template_UVDTF.ai và Template_Lazer.ai.' : ' Đã thêm template_saved.ai.') : '';
               const movementMessage = parsed.moveData === true ? ` Đã chuyển dữ liệu từ ${movedFolderCount} folder gốc.` : ' Không chuyển dữ liệu cũ.';
               return json(response, { ok: true, folderPaths, parentPath: normalizedParent.normalizedPath, createdCount, existingCount, moveData: parsed.moveData === true, message: `Đã thiết lập ${createdCount} folder mới; giữ nguyên ${existingCount} folder đã có.${templateMessage}${movementMessage}` });
             } catch (error) { return json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể thiết lập folder cha.' }, 400); }

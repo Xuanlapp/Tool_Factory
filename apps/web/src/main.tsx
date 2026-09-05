@@ -6,7 +6,7 @@ import { AppShell } from './layout/AppShell';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { getDashboardData, subscribeDashboard } from './api/repository';
 import type { DashboardData, DashboardSummary } from './api/types';
-import { DonePage, ErrorsPage, HistoryPage, OverviewPage, OutputsPage, ProcessedPage, QueuePage, SettingsPage, SheetsPage, ToolPage } from './pages';
+import { DonePage, ErrorsPage, HistoryPage, OverviewPage, OutputsPage, ProcessedPage, QueuePage, SettingsPage, SheetsPage, TestPage, ToolPage } from './pages';
 import './styles.css';
 
 const queryClient = new QueryClient();
@@ -72,6 +72,7 @@ function DashboardRoutes() {
       <Route path="/" element={<OverviewPage data={data} />} />
       <Route path="/queue" element={<QueuePage data={data} />} />
       <Route path="/tool" element={<ToolPage />} />
+      <Route path="/test" element={<TestPage />} />
       <Route path="/sheets" element={<ToolPage />} />
       <Route path="/done" element={<DonePage data={data} />} />
       <Route path="/processed" element={<ProcessedPage data={data} />} />
@@ -79,6 +80,13 @@ function DashboardRoutes() {
       <Route path="/outputs" element={<OutputsPage data={data} />} />
       <Route path="/history" element={<HistoryPage data={data} />} />
       <Route path="/settings" element={<SettingsPage data={data} />} />
+      <Route path="/label" element={<OverviewPage data={data} />} />
+      <Route path="/label/queue" element={<QueuePage data={data} />} />
+      <Route path="/label/tool" element={<ToolPage />} />
+      <Route path="/label/done" element={<DonePage data={data} />} />
+      <Route path="/label/errors" element={<ErrorsPage data={data} />} />
+      <Route path="/label/outputs" element={<OutputsPage data={data} />} />
+      <Route path="/label/settings" element={<SettingsPage data={data} />} />
       <Route path="/holo" element={<OverviewPage data={data} />} />
       <Route path="/holo/queue" element={<QueuePage data={data} />} />
       <Route path="/holo/tool" element={<ToolPage />} />

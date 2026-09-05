@@ -4,10 +4,12 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { PNG } from 'pngjs';
+import { runStartTestPrecheck } from './start-precheck.ts';
 
 const factoryRoot = process.env.ACRYLIC_FACTORY_ROOT ?? 'D:/FFACTORY/Arcylic';
 const rootDir = process.cwd();
 const imagesDir = process.env.ACRYLIC_IMAGES_DIR ?? path.join(factoryRoot, 'Images');
+const requestedImagePath = process.env.ACRYLIC_TEST_IMAGE_PATH?.trim();
 const templatePath = process.env.ACRYLIC_TEMPLATE_PATH ?? path.join(factoryRoot, 'template', 'Template_UVDTF.ai');
 const runtimeDir = path.join(rootDir, '.runtime');
 const jsxPath = path.join(rootDir, 'scripts', 'test-import-one-image.runtime.jsx');
@@ -20,6 +22,10 @@ function sideCountFor(imagePath: string) { return /(?:^|[_-])2-side(?:[_-]|$)/.t
 function expectedHeightFor(imagePath: string) { return sideCountFor(imagePath) >= 2 ? '91.44' : '60.96'; }
 function toJsxPath(value: string) { return value.replace(/\\/g, '/'); }
 async function firstPng() {
+  if (requestedImagePath) {
+    if (!existsSync(requestedImagePath) || path.extname(requestedImagePath).toLowerCase() !== '.png') throw new Error('Ảnh test được chỉ định không tồn tại hoặc không phải PNG.');
+    return requestedImagePath;
+  }
   const entries = await readdir(imagesDir, { withFileTypes: true });
   const found = entries.filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith('.png') && entry.name.toLowerCase() !== 'thumbs.db').map((entry) => path.join(imagesDir, entry.name)).sort()[0];
   if (!found) throw new Error('Không có ảnh PNG trong folder Images để test import.');
@@ -79,7 +85,11 @@ async function main() {
   const imagePath = await firstPng();
   const expectedHeightCm = expectedHeightFor(imagePath);
   const sideCount = sideCountFor(imagePath);
-  const colorRegions = readColorRegions(await readFile(imagePath), sideCount);
+  const imageBuffer = await readFile(imagePath);
+  const colorRegions = readColorRegions(imageBuffer, sideCount);
+  const png = PNG.sync.read(imageBuffer);
+  // Match start: canvas dimensions are derived from the 300-DPI placement size.
+  const startPrecheck = await runStartTestPrecheck(imagePath, sideCount, png.width / 300 * 2.54, png.height / 300 * 2.54, { faceToleranceCm, cutToleranceCm });
   await rm(resultPath, { force: true });
   const source = await readFile(path.join(rootDir, 'scripts', 'test-import-one-image.jsx'), 'utf8');
   await writeFile(jsxPath, [
@@ -91,9 +101,13 @@ async function main() {
     'var CODEX_TEST_FACE_TOLERANCE_CM = ' + JSON.stringify(faceToleranceCm) + ';',
     'var CODEX_TEST_CUT_TOLERANCE_CM = ' + JSON.stringify(cutToleranceCm) + ';',
     'var CODEX_TEST_COLOR_REGIONS = ' + JSON.stringify(colorRegions) + ';',
+    'var CODEX_START_PRECHECK_OK = ' + JSON.stringify(startPrecheck.ok) + ';',
+    'var CODEX_START_PRECHECK_STEP = ' + JSON.stringify(startPrecheck.step) + ';',
+    'var CODEX_START_PRECHECK_REASON = ' + JSON.stringify(startPrecheck.reason) + ';',
     source,
   ].join('\n'), 'utf8');
   console.log('TEST_IMPORT_ONE_IMAGE: ' + path.basename(imagePath));
+  console.log('START_PRECHECK: ' + path.basename(imagePath) + ' | ' + startPrecheck.step + ' | ' + (startPrecheck.ok ? 'true' : 'false') + (startPrecheck.reason ? ' | ' + startPrecheck.reason : ''));
   for (const line of colorRegionCheckLines(colorRegions)) console.log(line);
   await run('cscript.exe', ['//nologo', vbsPath, jsxPath]);
   if (!existsSync(resultPath)) throw new Error('TEST_IMPORT_RESULT_MISSING');

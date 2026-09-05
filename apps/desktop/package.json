@@ -58,6 +58,30 @@
             },
             {
                 "filter": [
+                    "Tool/Label.jsx",
+                    "Template/Template Labell FBA.ai"
+                ],
+                "from": "../../../Label",
+                "to": "bundle/Label"
+            },
+            {
+                "filter": [
+                    "Template_UVDTF.ai",
+                    "Template_Lazer.ai"
+                ],
+                "from": "../../template",
+                "to": "bundle/AcrylicTemplate"
+            },
+            {
+                "filter": [
+                    "template_saved.ai",
+                    "template holo.ai"
+                ],
+                "from": "../../../Sticker Vinyl/template",
+                "to": "bundle/StickerTemplate"
+            },
+            {
+                "filter": [
                     "*.mjs",
                     "*.ps1"
                 ],

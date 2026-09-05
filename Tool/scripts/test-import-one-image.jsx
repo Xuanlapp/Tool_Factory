@@ -323,14 +323,19 @@ try {
   var colorResult = testColorRegions(CODEX_TEST_COLOR_REGIONS);
   var ok = sizeOk && colorResult.ok;
   var message = 'TEST_IMAGE_SIZE: W=' + widthCm + 'cm | H=' + heightCm + 'cm | expectedW=30.48cm | expectedH=' + expectedHeightCm + 'cm | ' + (sizeOk ? 'true' : 'false');
-  if (!sizeOk) { writeResult(false, message + ' | ' + colorResult.message); }
+  if (!sizeOk) {
+    var startSizePrecheckOk = typeof CODEX_START_PRECHECK_OK === 'undefined' ? false : CODEX_START_PRECHECK_OK === true;
+    var startSizePrecheckMessage = typeof CODEX_START_PRECHECK_STEP === 'undefined' ? '' : ' | START_PRECHECK: ' + CODEX_START_PRECHECK_STEP + ' | ' + (startSizePrecheckOk ? 'true' : 'false') + (CODEX_START_PRECHECK_REASON ? ' | ' + CODEX_START_PRECHECK_REASON : '');
+    writeResult(startSizePrecheckOk, message + ' | ' + colorResult.message + startSizePrecheckMessage);
+  }
   else {
     var layoutMessage = createTestLayout(doc, placed, CODEX_TEST_SIDE_COUNT);
     var colorDrawMessage = drawTestColorChecks(doc, placed, CODEX_TEST_SIDE_COUNT, CODEX_TEST_COLOR_REGIONS);
     var twoSideReason = testTwoSideFailureReason();
     var cutResult = (ok && !twoSideReason) ? testCutAlignment(placed, CODEX_TEST_SIDE_COUNT, CODEX_TEST_COLOR_REGIONS, placed.visibleBounds) : { ok: false, message: 'CHECK_CUT_ALIGNMENT: skipped | reason=previous_check_false', reason: '' };
-    var finalOk = ok && !twoSideReason && cutResult.ok;
-    writeResult(finalOk, message + ' | ' + colorResult.message + ' | ' + colorDrawMessage + ' | ' + layoutMessage + (twoSideReason ? ' | ' + twoSideReason : '') + ' | ' + cutResult.message + (cutResult.reason ? ' | ' + cutResult.reason : ''));
+    var startPrecheckOk = typeof CODEX_START_PRECHECK_OK === 'undefined' ? (ok && !twoSideReason && cutResult.ok) : CODEX_START_PRECHECK_OK === true;
+    var startPrecheckMessage = typeof CODEX_START_PRECHECK_STEP === 'undefined' ? '' : ' | START_PRECHECK: ' + CODEX_START_PRECHECK_STEP + ' | ' + (startPrecheckOk ? 'true' : 'false') + (CODEX_START_PRECHECK_REASON ? ' | ' + CODEX_START_PRECHECK_REASON : '');
+    writeResult(startPrecheckOk, message + ' | ' + colorResult.message + ' | ' + colorDrawMessage + ' | ' + layoutMessage + (twoSideReason ? ' | ' + twoSideReason : '') + ' | ' + cutResult.message + (cutResult.reason ? ' | ' + cutResult.reason : '') + startPrecheckMessage);
   }
 } catch (error) {
   writeResult(false, String(error));

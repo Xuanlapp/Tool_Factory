@@ -4,3 +4,4 @@ export { ErrorsPage, OutputsPage } from './errors-outputs';
 export { HistoryPage, SettingsPage } from './history-settings';
 
 export { ToolPage } from './tool';
+export { TestPage } from './test';

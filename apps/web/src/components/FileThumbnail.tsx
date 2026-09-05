@@ -8,6 +8,7 @@ export function FileThumbnail({ scope, relativePath, fileName, version, classNam
   const [src, setSrc] = useState(initialSrc);
   useEffect(() => { setSrc(initialSrc); }, [initialSrc]);
   if (!src) return <div className={`${className} flex items-center justify-center rounded-2xl bg-slate-100 text-slate-400`}><ImageIcon className="h-6 w-6" /></div>;
+  if (fileName?.toLowerCase().endsWith('.pdf')) return <a href={src} target="_blank" rel="noreferrer" title={`Mở PDF: ${fileName}`} className={`${className} flex items-center justify-center rounded-2xl border border-rose-200 bg-rose-50 text-xs font-bold text-rose-700 hover:border-rose-400 hover:bg-rose-100`}>PDF</a>;
   return <button type="button" title={`Xem ảnh: ${fileName ?? 'preview'}`} onClick={(event) => { event.stopPropagation(); window.dispatchEvent(new CustomEvent('acrylic:preview-file', { detail: { src, fileName: fileName ?? 'Ảnh xem trước' } })); }} className={`${className} block overflow-hidden rounded-2xl border border-slate-200 transition hover:border-blue-500 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-500`}>
     <img loading="lazy" decoding="async" fetchPriority="low" src={src} alt={fileName ?? 'preview'} onError={() => { if (fallbackSrc && src !== fallbackSrc) setSrc(fallbackSrc); }} className={`h-full w-full ${fit === 'contain' ? 'object-contain bg-slate-50' : 'object-cover'}`} />
   </button>;
