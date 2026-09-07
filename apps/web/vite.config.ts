@@ -1349,8 +1349,13 @@ function localFilesystemApi(): Plugin {
         }
         if (url.pathname === '/api/v1/settings/sticker/template') {
           if (request.method === 'GET') return json(response, { templatePath: loadStickerTemplatePath() });
-          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as { templatePath?: unknown }; const templatePath = String(parsed.templatePath ?? '').trim(); if (path.extname(templatePath).toLowerCase() !== '.ai' || !existsSync(templatePath)) return json(response, { ok: false, message: 'Vui lòng chọn file template .ai đang tồn tại.' }, 400); saveStickerTemplatePath(templatePath); return json(response, { ok: true, templatePath }); } catch { return json(response, { ok: false, message: 'Không thể lưu template Sticker.' }, 400); } });
+          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as { templatePath?: unknown }; const source = String(parsed.templatePath ?? '').trim(); if (path.extname(source).toLowerCase() !== '.ai' || !existsSync(source)) return json(response, { ok: false, message: 'Vui lòng chọn file template .ai đang tồn tại.' }, 400); const target = path.join(folderPaths.template, 'template_saved.ai'); mkdirSync(folderPaths.template, { recursive: true }); fs.copyFileSync(source, target); saveStickerTemplatePath(target); return json(response, { ok: true, templatePath: target }); } catch { return json(response, { ok: false, message: 'Không thể lưu template Sticker.' }, 400); } });
           return;
+        }
+        if (url.pathname === '/api/v1/settings/templates') {
+          if (request.method !== 'GET' && request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
+          if (request.method === 'GET') { const names = activeProduct === 'acrylic' || activeProduct === 'holo' ? ['Template_UVDTF.ai', 'Template_Lazer.ai'] : activeProduct === 'label' ? ['Template Labell FBA.ai'] : ['template_saved.ai']; return json(response, { templates: names.map((name) => ({ name, path: path.join(folderPaths.template, name), exists: existsSync(path.join(folderPaths.template, name)) })) }); }
+          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as { templates?: Record<string, unknown> }; const names = activeProduct === 'acrylic' || activeProduct === 'holo' ? ['Template_UVDTF.ai', 'Template_Lazer.ai'] : activeProduct === 'label' ? ['Template Labell FBA.ai'] : ['template_saved.ai']; const result = []; mkdirSync(folderPaths.template, { recursive: true }); for (const name of names) { const source = String(parsed.templates?.[name] ?? '').trim(); if (!source) continue; if (path.extname(source).toLowerCase() !== '.ai' || !existsSync(source)) return json(response, { ok: false, message: `File ${name} không hợp lệ.` }, 400); const target = path.join(folderPaths.template, name); fs.copyFileSync(source, target); if (name === 'template_saved.ai') saveStickerTemplatePath(target); result.push({ name, path: target }); } if (!result.length) return json(response, { ok: false, message: 'Vui lòng chọn file template .ai.' }, 400); return json(response, { ok: true, templates: result }); } catch { return json(response, { ok: false, message: 'Không thể cập nhật template.' }, 400); } }); return;
         }
         if (url.pathname === '/api/v1/settings/checks/save') {
           let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => {
@@ -1403,7 +1408,9 @@ function localFilesystemApi(): Plugin {
                   const targetTemplatePath = path.join(nextPaths.template, templateFile);
                   const bundledPath = path.join(bundledTemplateRoot, templateFile);
                   const sourceTemplatePath = existsSync(bundledPath) ? bundledPath : path.join(factoryRoot, 'template', templateFile);
-                  if (!existsSync(targetTemplatePath) && existsSync(sourceTemplatePath)) {
+                  // A parent-folder setup must refresh both Tool templates, even when
+                  // a previous template already exists in the destination folder.
+                  if (existsSync(sourceTemplatePath)) {
                     fs.copyFileSync(sourceTemplatePath, targetTemplatePath);
                     templateCopied = true;
                   }
