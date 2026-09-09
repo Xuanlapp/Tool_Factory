@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { AlertCircle, CheckCircle2, Download, FileImage, FolderClock, Layers3 } from 'lucide-react';
 import { apiBase } from '../api/client';
 import type { DashboardData, QueueItem, WaitFile, WaitItem } from '../api/types';
@@ -45,12 +45,12 @@ function QueueImageFallback({ item }: { item: QueueItem }) {
 }
 
 export function OverviewPage({ data }: { data: DashboardData }) {
-  const done = data.done.slice(0, 5);
-  const errors = data.errors.slice(0, 5);
   const [queuePage, setQueuePage] = useState(1);
   const [queuePageSize, setQueuePageSize] = useState(10);
   const queue = paginateItems(data.queue, queuePage, queuePageSize);
-  return <div className="space-y-6"><SectionTitle title="Tổng quan" subtitle="Theo dõi nhanh số lượng ảnh và trạng thái xử lý."/><div className="grid gap-4 xl:grid-cols-4"><MetricCard icon={FileImage} label="Images" value={data.summary.kpi.queue} tone="blue"/><MetricCard icon={Layers3} label="Đang xử lý" value={data.summary.kpi.processing} tone="orange"/><MetricCard icon={FolderClock} label="Wait" value={data.summary.kpi.wait} tone="violet"/><MetricCard icon={AlertCircle} label="Lỗi" value={data.summary.kpi.errors} tone="red"/></div><div className="grid gap-6 xl:grid-cols-[1.45fr_0.85fr]"><Panel title="Hàng chờ" right={<StatusBadge label={`${data.queue.length} ảnh`} tone="blue"/>}><DataTable headers={['Ảnh', 'Ưu tiên', 'Tên file', 'Size', 'Side', 'Qty', 'Đã đặt', 'Còn lại', 'Trạng thái']}>{queue.items.map((item) => <QueueRow key={item.id} item={item}/>)}</DataTable><PaginationBar page={queue.currentPage} totalPages={queue.totalPages} totalItems={queue.total} pageSize={queuePageSize} onPageChange={setQueuePage} onPageSizeChange={(size) => { setQueuePageSize(size); setQueuePage(1); }}/></Panel><div className="space-y-6"><Panel title="Đã xong gần đây" right={<StatusBadge label={String(data.done.length)} tone="green"/>}><div className="space-y-3">{done.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 p-3"><FileThumbnail scope={item.previewScope} relativePath={item.previewRelativePath} fileName={item.fileName} className="h-12 w-12"/><div className="min-w-0 flex-1"><div className="truncate font-medium">{item.fileName}</div><div className="text-sm text-slate-500">{item.completedAt}</div></div></div>)}</div></Panel><Panel title="Lỗi gần đây" right={<StatusBadge label={String(data.errors.length)} tone="red"/>}><div className="space-y-3">{errors.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 p-3"><FileThumbnail scope={item.previewScope} relativePath={item.previewRelativePath} fileName={item.fileName} className="h-12 w-12"/><div className="min-w-0 flex-1"><div className="truncate font-medium">{item.fileName}</div><div className="text-sm text-slate-500">{item.reason}</div></div></div>)}</div></Panel></div></div></div>;
+  const flowQueue = (flow: 'FBA' | 'FBM') => data.queue.filter((item) => item.fileName.toUpperCase().startsWith(flow + '_'));
+  const flowPanel = (flow: 'FBA' | 'FBM') => { const items = flowQueue(flow); const isFba = flow === 'FBA'; const accent = isFba ? 'green' : 'blue'; return <section className={`overflow-hidden rounded-3xl border bg-white shadow-[0_8px_24px_rgba(15,23,42,0.05)] ${isFba ? 'border-emerald-200' : 'border-blue-200'}`}><div className={`flex items-center justify-between px-5 py-3.5 text-white ${isFba ? 'bg-emerald-600' : 'bg-blue-600'}`}><div><div className="text-[10px] font-bold tracking-[0.16em] opacity-75">FLOW / {flow}</div><h3 className="mt-0.5 text-xl font-bold">Ảnh {flow}</h3></div><div className="min-w-16 rounded-xl bg-white/15 px-2 py-1 text-right"><div className="text-xl font-bold">{items.length}</div><div className="text-[10px] opacity-80">ảnh đang chờ</div></div></div><div className="p-3">{items.length ? <DataTable headers={['Ảnh','Tên file','Size','Side','Qty','Trạng thái']}>{items.slice(0, 10).map((item) => <tr key={item.id} className="bg-white transition hover:bg-slate-50"><td className="px-3 py-2"><FileThumbnail scope={item.previewScope} relativePath={item.previewRelativePath} fileName={item.fileName} className="h-12 w-12"/></td><td className="px-3 py-2"><div className="max-w-[280px] break-all text-sm font-semibold text-slate-800">{item.fileName}</div></td><td className="px-3 py-2 text-sm font-medium">{item.sizeInch}in</td><td className="px-3 py-2 text-sm">{item.side}</td><td className="px-3 py-2 text-sm font-semibold">{item.qty}</td><td className="px-3 py-2"><StatusBadge label="Chờ" tone={accent}/></td></tr>)}</DataTable> : <div className={`flex min-h-32 flex-col items-center justify-center rounded-2xl border border-dashed ${isFba ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-blue-200 bg-blue-50 text-blue-700'}`}><FileImage className="h-8 w-8 opacity-50"/><div className="mt-2 text-sm font-semibold">Chưa có ảnh {flow}</div><div className="mt-0.5 text-xs opacity-75">Thêm file {flow}_ để bắt đầu.</div></div>}</div></section>; };
+  return <div className="grid gap-2"><div className="rounded-3xl border border-slate-200 bg-slate-50 px-6 py-5"><SectionTitle title="Tổng quan" subtitle="Hai luồng sản xuất được tách riêng để theo dõi và chạy chính xác."/><div className="mt-4 grid w-full grid-cols-2 gap-2"><MetricCard icon={FileImage} label="FBA" value={flowQueue('FBA').length} tone="green" hint="Ảnh chờ"/><MetricCard icon={FileImage} label="FBM" value={flowQueue('FBM').length} tone="blue" hint="Ảnh chờ"/></div></div><div className="grid gap-2 2xl:grid-cols-2">{flowPanel('FBA')}{flowPanel('FBM')}</div></div>;
 }
 
 export function QueuePage({ data }: { data: DashboardData }) {
@@ -59,12 +59,15 @@ export function QueuePage({ data }: { data: DashboardData }) {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const waitFiles = useMemo(() => data.sheet.waitFiles.filter((item) => waitMatches(item, search)), [data.sheet.waitFiles, search]);
+  const fbaWaitFiles = useMemo(() => waitFiles.filter((item) => item.fileName.toUpperCase().startsWith('FBA_')), [waitFiles]);
+  const fbmWaitFiles = useMemo(() => waitFiles.filter((item) => item.fileName.toUpperCase().startsWith('FBM_')), [waitFiles]);
   const [selectedWaitFile, setSelectedWaitFile] = useState<string | null>(null);
   const [waitAction, setWaitAction] = useState<'export' | 'printed' | null>(null);
   const [waitNotice, setWaitNotice] = useState('');
   const [waitBusy, setWaitBusy] = useState(false);
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [stickerTransferModalOpen, setStickerTransferModalOpen] = useState(false);
+  const [flowModalAction, setFlowModalAction] = useState<'export' | 'printed' | 'sticker' | null>(null);
   const [toolRunning, setToolRunning] = useState(false);
 
   useEffect(() => {
@@ -79,6 +82,8 @@ export function QueuePage({ data }: { data: DashboardData }) {
   }, [data.sheet.currentWaitFile, selectedWaitFile, waitFiles]);
 
   const selectedWait = waitFiles.find((item) => item.fileName === selectedWaitFile) ?? waitFiles[0] ?? null;
+  const availableFlows = (['FBA', 'FBM'] as const).filter((flow) => waitFiles.some((file) => file.fileName.toUpperCase().startsWith(flow + '_')));
+  const chooseWaitFlow = (flow: 'FBA' | 'FBM') => { const file = waitFiles.find((item) => item.fileName.toUpperCase().startsWith(flow + '_')); if (!file) return; setSelectedWaitFile(file.fileName); const action = flowModalAction; setFlowModalAction(null); if (action === 'export') setExportModalOpen(true); else if (action === 'sticker') setStickerTransferModalOpen(true); else setWaitAction('printed'); };
   const pagedItems = useMemo(() => paginateItems(selectedWait?.itemList ?? [], page, pageSize), [selectedWait, page, pageSize]);
 
   useEffect(() => {
@@ -170,17 +175,17 @@ export function QueuePage({ data }: { data: DashboardData }) {
         <div className="flex flex-wrap items-center gap-3">
           <FilterBar><QueueSearchInput value={search} onChange={setSearch} /></FilterBar>
           <div className="ml-auto flex flex-wrap gap-3">
-            <button type="button" disabled={!selectedWait || waitBusy || toolRunning} onClick={() => isSticker ? setStickerTransferModalOpen(true) : setExportModalOpen(true)} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-blue-300 bg-blue-50 px-5 text-left text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-6 w-6"/><span><b className="block">{isSticker ? 'Chuyển Output AI' : 'Export File'}</b><small className="text-xs text-blue-500">{isSticker ? 'Chuyển thẳng wait vào output AI theo ngày' : 'Sao chép wait và xuất thành phẩm'}</small></span></button>
-            {!isSticker ? <button type="button" disabled={!selectedWait || waitBusy || toolRunning} onClick={() => setWaitAction('printed')} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 text-left text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 className="h-6 w-6"/><span><b className="block">Đã in</b><small className="text-xs text-emerald-500">Đánh dấu file wait đã in</small></span></button> : null}
+            <button type="button" disabled={!selectedWait || waitBusy || toolRunning || availableFlows.length === 0} onClick={() => isSticker ? setFlowModalAction('sticker') : setFlowModalAction('export')} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-blue-300 bg-blue-50 px-5 text-left text-blue-700 shadow-sm transition hover:bg-blue-100 disabled:cursor-not-allowed disabled:opacity-40"><Download className="h-6 w-6"/><span><b className="block">{isSticker ? 'Chuyển Output AI' : 'Export File'}</b><small className="text-xs text-blue-500">{isSticker ? 'Chuyển thẳng wait vào output AI theo ngày' : 'Sao chép wait và xuất thành phẩm'}</small></span></button>
+            {!isSticker ? <button type="button" disabled={!selectedWait || waitBusy || toolRunning || availableFlows.length === 0} onClick={() => setFlowModalAction('printed')} className="inline-flex h-14 items-center gap-3 rounded-2xl border border-emerald-300 bg-emerald-50 px-5 text-left text-emerald-700 shadow-sm transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-40"><CheckCircle2 className="h-6 w-6"/><span><b className="block">Đã in</b><small className="text-xs text-emerald-500">Đánh dấu file wait đã in</small></span></button> : null}
           </div>
         </div>
         {waitNotice ? <div className="mt-4 rounded-2xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">{waitNotice}</div> : null}
       </Panel>
 
-      <div className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr_1fr]">
-        <Panel title="Danh sách file wait" right={<StatusBadge label={`${waitFiles.length} file`} tone="blue" />}>
+      <div className="grid w-full grid-cols-2 gap-2">
+        <Panel title="Wait FBA" right={<StatusBadge label={`${fbaWaitFiles.length} file`} tone="blue" />}>
           <div className="space-y-3">
-            {waitFiles.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Chưa có file wait.</div> : waitFiles.map((waitFile) => {
+            {fbaWaitFiles.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Chưa có file wait FBA.</div> : fbaWaitFiles.map((waitFile) => {
               const active = selectedWait?.fileName === waitFile.fileName;
               return (
                 <button key={waitFile.fileName} type="button" onClick={() => setSelectedWaitFile(waitFile.fileName)} className={`w-full rounded-2xl border p-4 text-left transition ${active ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}>
@@ -198,23 +203,24 @@ export function QueuePage({ data }: { data: DashboardData }) {
           </div>
         </Panel>
 
-        <Panel title={selectedWait ? `Item trong ${selectedWait.fileName}` : 'Item trong wait'} right={selectedWait ? <StatusBadge label={`${selectedWait.items} item`} tone="blue" /> : undefined}>
-          {!selectedWait ? <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Chọn một file wait để xem chi tiết.</div> : <><div className="space-y-3">{pagedItems.items.map((item) => <div key={item.id} className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white p-3"><FileThumbnail scope={item.previewScope} relativePath={waitItemPreview(selectedWait, item)} fileName={item.fileName} className="h-20 w-20" /><div className="min-w-0 flex-1"><div className="truncate font-medium text-slate-900">{item.fileName}</div><div className="mt-1 text-xs text-slate-500">{item.sizeInch}in • {item.side}</div><div className="mt-2 text-sm text-slate-600">Đã đặt {item.qtyPlaced} • Còn lại {item.qtyRemaining}</div></div></div>)}</div><PaginationBar page={pagedItems.currentPage} totalPages={pagedItems.totalPages} totalItems={pagedItems.total} pageSize={pageSize} onPageChange={setPage} onPageSizeChange={(size) => { setPageSize(size); setPage(1); }} /></>}
+        <Panel title="WAIT FBM" right={<StatusBadge label={`${fbmWaitFiles.length} file`} tone="blue" />}>
+          {fbmWaitFiles.length === 0 ? <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Chưa có file wait FBM.</div> : <div className="space-y-3">{fbmWaitFiles.map((waitFile) => { const active = selectedWait?.fileName === waitFile.fileName; return <button key={waitFile.fileName} type="button" onClick={() => setSelectedWaitFile(waitFile.fileName)} className={`w-full rounded-2xl border p-4 text-left transition ${active ? 'border-blue-500 bg-blue-50' : 'border-slate-200 bg-white hover:border-slate-300'}`}><div className="truncate font-semibold text-slate-900">{waitFile.fileName}</div><div className="mt-2 text-sm text-slate-600">{waitFile.items} item · Fit {waitFile.fitCapInch}in · Cập nhật {waitFile.updatedAt}</div></button>; })}</div>}
         </Panel>
 
-        <Panel title="Preview file wait">
-          {!selectedWait ? <div className="rounded-2xl border border-dashed border-slate-200 p-4 text-sm text-slate-500">Chưa có file wait để preview.</div> : <div className="space-y-4"><div className="flex h-[560px] items-center justify-center overflow-hidden rounded-2xl border border-slate-200 bg-slate-50">{selectedWait.previewUrl ? <img src={selectedWait.previewUrl} alt={selectedWait.fileName} className="h-full w-full object-contain" /> : <span className="text-sm text-slate-500">Chưa có preview.</span>}</div><div className="rounded-2xl border border-slate-200 p-4 text-sm text-slate-700"><div className="flex justify-between gap-3"><span>File wait</span><b className="truncate text-right">{selectedWait.fileName}</b></div><div className="mt-3 flex justify-between gap-3"><span>Số item</span><b>{selectedWait.items}</b></div><div className="mt-3 flex justify-between gap-3"><span>Khả năng fit</span><b>{selectedWait.fitCapInch}in</b></div><div className="mt-3 flex justify-between gap-3"><span>Cập nhật</span><b>{selectedWait.updatedAt}</b></div><div className="mt-3 flex justify-between gap-3"><span>Trạng thái</span><b className={selectedWait.printedAt ? 'text-emerald-600' : 'text-slate-500'}>{selectedWait.printedAt ? 'Đã in' : 'Chưa in'}</b></div></div></div>}
-        </Panel>
       </div>
       {waitAction === 'printed' && selectedWait ? <WaitPrintedModal fileName={selectedWait.fileName} busy={waitBusy} onClose={() => !waitBusy && setWaitAction(null)} onConfirm={() => void markPrinted()} /> : null}
       {exportModalOpen && selectedWait ? <WaitExportModal fileName={selectedWait.fileName} busy={waitBusy} onClose={() => !waitBusy && setExportModalOpen(false)} onSubmit={(assets) => void exportWait(assets)} /> : null}
-      {stickerTransferModalOpen && selectedWait ? <StickerTransferModal fileName={selectedWait.fileName} busy={waitBusy} onClose={() => !waitBusy && setStickerTransferModalOpen(false)} onConfirm={() => void transferStickerWait()} /> : null}
+      {stickerTransferModalOpen && selectedWait ? <StickerTransferModal fileName={selectedWait.fileName} busy={waitBusy} onClose={() => !waitBusy && setStickerTransferModalOpen(false)} onConfirm={() => void transferStickerWait()} /> : null}{flowModalAction ? <WaitFlowModal action={flowModalAction} flows={availableFlows} busy={waitBusy} onClose={() => setFlowModalAction(null)} onChoose={chooseWaitFlow} /> : null}
     </div>
   );
 }
 
 function StickerTransferModal({ fileName, busy, onClose, onConfirm }: { fileName: string; busy: boolean; onClose: () => void; onConfirm: () => void }) {
   return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl"><div className="text-xl font-semibold text-slate-900">Chuyển Sticker vào Output AI?</div><p className="mt-3 break-all text-sm leading-6 text-slate-600">File <b>{fileName}</b> sẽ được chuyển khỏi hàng chờ vào thư mục output AI của ngày hiện tại và tự đánh số tiếp theo (01, 02, 03...).</p><div className="mt-6 grid grid-cols-2 gap-3"><button type="button" disabled={busy} onClick={onClose} className="h-12 rounded-2xl border border-slate-300 text-sm font-semibold text-slate-700 disabled:opacity-40">Hủy</button><button type="button" disabled={busy} onClick={onConfirm} className="h-12 rounded-2xl bg-blue-600 text-sm font-semibold text-white disabled:opacity-40">{busy ? 'Đang chuyển...' : 'Xác nhận'}</button></div></div></div>;
+}
+
+function WaitFlowModal({ action, flows, busy, onClose, onChoose }: { action: 'export' | 'printed' | 'sticker'; flows: Array<'FBA' | 'FBM'>; busy: boolean; onClose: () => void; onChoose: (flow: 'FBA' | 'FBM') => void }) {
+  return <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4" role="dialog" aria-modal="true"><div className="w-full max-w-md rounded-[28px] bg-white p-6 shadow-2xl"><div className="text-xl font-semibold text-slate-900">Chọn luồng file wait</div><p className="mt-2 text-sm text-slate-500">Chỉ những luồng đang có file wait mới được chọn. Mỗi lần chỉ chọn một luồng.</p><div className="mt-5 grid grid-cols-2 gap-3">{(['FBA', 'FBM'] as const).map((flow) => { const enabled = flows.includes(flow); return <button key={flow} type="button" disabled={busy || !enabled} onClick={() => onChoose(flow)} className={`h-16 rounded-2xl border text-lg font-bold ${enabled ? flow === 'FBA' ? 'border-emerald-300 bg-emerald-50 text-emerald-700' : 'border-blue-300 bg-blue-50 text-blue-700' : 'cursor-not-allowed border-slate-200 bg-slate-100 text-slate-400'}`}>{flow}{!enabled ? ' · Không có file' : ''}</button>; })}</div><button type="button" disabled={busy} onClick={onClose} className="mt-4 h-11 w-full rounded-2xl border border-slate-300 text-sm font-semibold text-slate-700">Hủy</button></div></div>;
 }
 
 function WaitPrintedModal({ fileName, busy, onClose, onConfirm }: { fileName: string; busy: boolean; onClose: () => void; onConfirm: () => void }) {

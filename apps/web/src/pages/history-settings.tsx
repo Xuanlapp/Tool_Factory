@@ -138,6 +138,8 @@ export function SettingsPage({ data }: { data: DashboardData }) {
 
   const folderLabels: Record<string, string> = {
     Images: isLabel ? 'File_Label - PDF đầu vào' : 'Images - ảnh đầu vào',
+    Images_FBA: 'Images FBA - ảnh đầu vào',
+    Images_FBM: 'Images FBM - ảnh đầu vào',
     wait: 'Wait - file AI đang chờ',
     imgaes_done: isLabel ? 'Label_done - PDF đã xong' : 'Done - ảnh đã chạy xong',
     images_error: isLabel ? 'Label_error - PDF lỗi' : 'Images Error - ảnh lỗi',
@@ -151,7 +153,7 @@ export function SettingsPage({ data }: { data: DashboardData }) {
     note_done: 'Note Done - ghi chú sheet đã lưu',
     note_work: 'Note Work - file working đang chạy',
   };
-  const stickerFolderKeys = new Set(['Images', 'images_error', 'imgaes_done', 'wait', 'wait_meta', 'note_done', 'note_work', 'output_ai', 'template']);
+  const stickerFolderKeys = new Set(['Images', 'Images_FBA', 'Images_FBM', 'images_error', 'imgaes_done', 'wait', 'wait_meta', 'note_done', 'note_work', 'output_ai', 'template']);
   const labelFolderKeys = new Set(['Images', 'images_error', 'imgaes_done', 'output_ai', 'template']);
   const folders = data.settings.folders.filter((folder) => isLabel ? labelFolderKeys.has(folder.key) : !isSticker || stickerFolderKeys.has(folder.key)).map((folder) => ({ ...folder, label: folderLabels[folder.key] ?? folder.label }));
   const setupDone = setup.status === 'completed' && setup.setupRequired === false;

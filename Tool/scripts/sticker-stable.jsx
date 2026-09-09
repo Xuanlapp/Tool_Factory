@@ -251,6 +251,8 @@ KẾT LUẬN
                 if (!(f instanceof File)) return false;
                 var cleanBase = stripExt(cleanFileName(f.name));
                 if (/-\s*done\s*$/i.test(cleanBase)) return false;
+                var flowPrefix = typeof CODEX_FLOW_PREFIX !== 'undefined' ? String(CODEX_FLOW_PREFIX) : '';
+                if (flowPrefix && cleanBase.toUpperCase().indexOf(flowPrefix.toUpperCase() + '_') !== 0) return false;
                 return /\.(png|jpg|jpeg)$/i.test(cleanFileName(f.name));
             });
 
@@ -281,6 +283,22 @@ KẾT LUẬN
             var placedCountByFile = {};
             var failedFileKeys = {};
             var placedOnSheetCount = 0;
+
+            function openNextStickerSheet() {
+                var nextTemplate = new File(typeof CODEX_STICKER_TEMPLATE_FILE !== "undefined" ? CODEX_STICKER_TEMPLATE_FILE : OUT_TEMPLATE + "/template_saved.ai");
+                if (!nextTemplate.exists) throw new Error("Không tìm thấy template để mở sheet tiếp theo.");
+                doc = app.open(nextTemplate);
+                SHOULD_CLOSE_AFTER_SAVE = false;
+                RUN_WAIT_MODE = false;
+                WAIT_SOURCE_FILE = null;
+                WAIT_BASE_NAME = "";
+                WAIT_MAX_INCH = null;
+                packer = createSmartPacker(doc, MARGIN_PT, GAP_PT, ALLOW_ROTATE, null, null, waitMetaFolder);
+                currentSheetIds = [];
+                currentSheetLayers = [];
+                currentSheetDoneFiles = [];
+                placedOnSheetCount = 0;
+            }
             // ==========================================
             // Táº O JOBS
             // ==========================================
@@ -413,6 +431,10 @@ KẾT LUẬN
                             if (currentSheetDoneFiles.length >= MAX_IMAGES_BEFORE_WAIT) {
                                 $.writeln("Reached wait threshold: " + currentSheetDoneFiles.length + " images. Saving as wait and closing app.");
                                 saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder, true, info.inch);
+                                if (pendingJobs.length > 0) {
+                                    openNextStickerSheet();
+                                    continue;
+                                }
                                 stoppedByUser = true;
                                 break;
                             }
@@ -431,6 +453,10 @@ KẾT LUẬN
 
                             if (currentSheetIds.length > 0) {
                                 saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder);
+                                if (pendingJobs.length > 0) {
+                                    openNextStickerSheet();
+                                    continue;
+                                }
                             }
 
                             stoppedByUser = true;
@@ -455,7 +481,10 @@ KẾT LUẬN
                 if (!placedSomethingThisRound) {
                     if (currentSheetIds.length > 0) {
                         saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder);
-
+                        if (pendingJobs.length > 0) {
+                            openNextStickerSheet();
+                            continue;
+                        }
                         stoppedByUser = true;
                         break;
                     } else {

@@ -36,7 +36,7 @@ function fixVietnameseMojibake(value: unknown): unknown {
 }
 
 type RunnerStatus = 'idle' | 'running' | 'error';
-type ToolCommand = 'start' | 'all' | 'check' | 'test' | 'sticker' | 'label';
+type ToolCommand = 'start' | 'fba' | 'fbm' | 'all' | 'check' | 'test' | 'sticker' | 'label';
 type ExportAssetKind = 'front' | 'back' | 'lazer';
 type RunKind = 'tool' | 'export' | 'setup';
 type ToolStep = { index: number; total: number; step: string; fileName: string; status: 'running' | 'success' | 'error'; message: string };
@@ -95,6 +95,8 @@ const holoFolderSettingsPath = path.join(factoryRoot, '.runtime', 'folder-settin
 const checkSettingsPath = path.join(factoryRoot, '.runtime', 'check-settings.json');
 const defaultFolderPaths: Record<string, string> = {
   Images: path.join(factoryRoot, 'Images'),
+  Images_FBA: path.join(factoryRoot, 'Images'),
+  Images_FBM: path.join(factoryRoot, 'Images'),
   images_error: path.join(factoryRoot, 'images_error'),
   images_processed: path.join(factoryRoot, 'images_processed'),
   imgaes_done: path.join(factoryRoot, 'imgaes_done'),
@@ -107,6 +109,8 @@ const defaultFolderPaths: Record<string, string> = {
 };
 const defaultHoloFolderPaths: Record<string, string> = {
   Images: path.join(factoryRoot, 'images_holo'),
+  Images_FBA: path.join(factoryRoot, 'images_holo'),
+  Images_FBM: path.join(factoryRoot, 'images_holo'),
   images_error: path.join(factoryRoot, 'images_holo_error'),
   images_processed: path.join(factoryRoot, 'images_holo_processed'),
   imgaes_done: path.join(factoryRoot, 'images_holo_done'),
@@ -143,6 +147,8 @@ const bundledStickerHoloRoot = path.join(factoryRoot, 'Sticker Holo');
 const stickerHoloRoot = existsSync(externalStickerHoloRoot) ? externalStickerHoloRoot : bundledStickerHoloRoot;
 const defaultStickerFolderPaths: Record<string, string> = {
   Images: path.join(stickerRoot, 'Sticker'),
+  Images_FBA: path.join(stickerRoot, 'Sticker'),
+  Images_FBM: path.join(stickerRoot, 'Sticker'),
   images_error: path.join(stickerRoot, 'image-error'),
   images_processed: path.join(stickerRoot, 'image-processed'),
   imgaes_done: path.join(stickerRoot, 'image-done'),
@@ -158,6 +164,8 @@ const defaultStickerFolderPaths: Record<string, string> = {
 };
 const defaultStickerHoloFolderPaths: Record<string, string> = {
   Images: path.join(stickerHoloRoot, 'Sticker'),
+  Images_FBA: path.join(stickerHoloRoot, 'Sticker'),
+  Images_FBM: path.join(stickerHoloRoot, 'Sticker'),
   images_error: path.join(stickerHoloRoot, 'image-error'),
   images_processed: path.join(stickerHoloRoot, 'image-processed'),
   imgaes_done: path.join(stickerHoloRoot, 'image-done'),
@@ -182,7 +190,7 @@ function isStickerProduct(product: string) { return product === 'sticker' || pro
 function folderSettingsFile(product = 'acrylic') { return product === 'label' ? labelFolderSettingsPath : product === 'holo' ? holoFolderSettingsPath : product === 'sticker-holo' ? stickerHoloFolderSettingsPath : product === 'sticker' ? stickerFolderSettingsPath : folderSettingsPath; }
 function defaultPathsFor(product = 'acrylic') { return product === 'label' ? defaultLabelFolderPaths : product === 'holo' ? defaultHoloFolderPaths : product === 'sticker-holo' ? defaultStickerHoloFolderPaths : product === 'sticker' ? defaultStickerFolderPaths : defaultFolderPaths; }
 function defaultFolderRootFor(product = 'acrylic') { return product === 'label' ? labelRoot : product === 'sticker-holo' ? stickerHoloRoot : product === 'sticker' ? stickerRoot : factoryRoot; }
-function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; return { ...defaultPathsFor(product), ...saved }; } catch { return { ...defaultPathsFor(product) }; } }
+function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; const paths = { ...defaultPathsFor(product), ...saved }; if (product !== 'label' && paths.Images && (paths.Images_FBA === path.join(factoryRoot, 'Images') || !saved.Images_FBA)) paths.Images_FBA = paths.Images; if (product !== 'label' && paths.Images && (paths.Images_FBM === path.join(factoryRoot, 'Images') || !saved.Images_FBM)) paths.Images_FBM = paths.Images; return paths; } catch { const defaults = defaultPathsFor(product); if (product !== 'label') { defaults.Images_FBA = defaults.Images; defaults.Images_FBM = defaults.Images; } return defaults; } }
 function saveFolderPaths(next: Record<string, string>, product = 'acrylic') { const settingsPath = folderSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 type CheckSettings = { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number; jsxBatchSize: number; itemGapCm: number };
 type StickerSettings = { marginMm: number; gapMm: number };
@@ -388,6 +396,46 @@ function moveErrorToImagesWithApproval(relativePath: string) {
   cachedSnapshot = null;
   cacheExpiresAt = 0;
   return path.relative(targetRoot, finalTarget);
+}
+
+function fixedDesignBaseName(fileName: string) {
+  return path.basename(fileName, path.extname(fileName)).replace(/_FIXED_\d{1,2}-\d{1,2}-\d{1,2}-\d{1,2}-\d{4}$/i, '');
+}
+
+function isFixedDesignFile(fileName: string) {
+  return /_FIXED_\d{1,2}-\d{1,2}-\d{1,2}-\d{1,2}-\d{4}(?:\.[^.]+)?$/i.test(fileName);
+}
+
+function flowImagesPath(flowPrefix: string) {
+  return flowPrefix === 'FBA' ? (folderPaths.Images_FBA || folderPaths.Images) : flowPrefix === 'FBM' ? (folderPaths.Images_FBM || folderPaths.Images) : folderPaths.Images;
+}
+
+function reconcileFixedDesignsBeforeRun(imagesPath = folderPaths.Images) {
+  // A corrected upload replaces only its matching original; unrelated designs stay queued.
+  if (activeProduct === 'label') return [] as string[];
+  mkdirSync(imagesPath, { recursive: true });
+  mkdirSync(folderPaths.images_error, { recursive: true });
+  const files = readdirSync(imagesPath, { withFileTypes: true }).filter((entry) => entry.isFile());
+  const fixedBases = new Set(files.filter((entry) => isFixedDesignFile(entry.name)).map((entry) => fixedDesignBaseName(entry.name).toLowerCase()));
+  if (!fixedBases.size) return [] as string[];
+  const moved: string[] = [];
+  for (const entry of files) {
+    if (isFixedDesignFile(entry.name) || !fixedBases.has(fixedDesignBaseName(entry.name).toLowerCase())) continue;
+    const source = path.join(imagesPath, entry.name);
+    const target = nextAvailableMoveTarget(path.join(folderPaths.images_error, entry.name));
+    try { renameSync(source, target); } catch { fs.copyFileSync(source, target); fs.rmSync(source, { force: true }); }
+    moved.push(entry.name);
+  }
+  if (moved.length) {
+    const metadataPath = path.join(folderPaths.images_error, '.error-metadata.json');
+    let metadata: Record<string, Record<string, unknown>> = {};
+    try { metadata = JSON.parse(readFileSync(metadataPath, 'utf8')) as Record<string, Record<string, unknown>>; } catch {}
+    for (const name of moved) metadata[name] = { reason: 'Đã thay đổi design: có file FIXED thay thế trong Images.', updatedAt: new Date().toISOString() };
+    writeFileSync(metadataPath, JSON.stringify(metadata, null, 2), 'utf8');
+    cachedSnapshot = null;
+    cacheExpiresAt = 0;
+  }
+  return moved;
 }
 
 function persistToolState() {
@@ -636,17 +684,18 @@ function buildOutputAiCopyTarget(waitFileName: string) {
   const folder = path.join(folderPaths.output_ai, `thang${month}`, `${day}-${month}-${year}`);
   mkdirSync(folder, { recursive: true });
   const waitBase = path.basename(waitFileName, path.extname(waitFileName));
-  const waitSize = waitBase.match(/^wait_(.+)$/i)?.[1] ?? 'unknown';
+  const waitSize = waitBase.match(/^(?:(FBA|FBM)_)?wait_(.+)$/i)?.[2] ?? 'unknown';
+  const flowPrefix = waitBase.match(/^(FBA|FBM)_/i)?.[1]?.toUpperCase();
   let index = 1;
   while (true) {
-    const fileName = `wait_${waitSize}_${day}_${month}_${String(index).padStart(2, '0')}.ai`;
+    const fileName = `${flowPrefix ? flowPrefix + '_' : ''}wait_${waitSize}_${day}_${month}_${String(index).padStart(2, '0')}.ai`;
     const filePath = path.join(folder, fileName);
     if (!existsSync(filePath)) return { filePath, relativePath: path.relative(folderPaths.output_ai, filePath) };
     index += 1;
   }
 }
 
-function buildStickerOutputTarget() {
+function buildStickerOutputTarget(flowPrefix = '') {
   const now = new Date();
   const day = now.getDate();
   const month = now.getMonth() + 1;
@@ -655,7 +704,7 @@ function buildStickerOutputTarget() {
   mkdirSync(folder, { recursive: true });
   let index = 1;
   while (true) {
-    const fileName = `sticker_${String(index).padStart(2, '0')}.ai`;
+    const fileName = `${flowPrefix ? flowPrefix + '_' : ''}sticker_${String(index).padStart(2, '0')}.ai`;
     const filePath = path.join(folder, fileName);
     if (!existsSync(filePath)) return { filePath, relativePath: path.relative(folderPaths.output_ai, filePath) };
     index += 1;
@@ -665,7 +714,8 @@ function buildStickerOutputTarget() {
 function moveStickerWaitToOutput(waitRelativePath: string) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Tool hoặc Export đang chạy.', run: activeRun };
   const source = resolveWaitAiPath(waitRelativePath);
-  const target = buildStickerOutputTarget();
+  const waitPrefix = path.basename(source, path.extname(source)).match(/^(FBA|FBM)_/i)?.[1]?.toUpperCase() ?? '';
+  const target = buildStickerOutputTarget(waitPrefix);
   try {
     renameSync(source, target.filePath);
   } catch (error) {
@@ -743,29 +793,32 @@ function runTool(command: ToolCommand) {
     launchPersistentOperation(run, 'cscript.exe', ['//nologo', path.join(toolDir, 'scripts', 'launch-illustrator-and-run.vbs'), labelRuntimePath]);
     return { ok: true, message: 'Đã chạy Tool Label.', run: activeRun };
   }
-  if (command === 'sticker') {
+  const flowPrefix = command === 'fba' ? 'FBA' : command === 'fbm' ? 'FBM' : '';
+  const imagesPath = flowImagesPath(flowPrefix);
+  if ((flowPrefix === 'FBA' || flowPrefix === 'FBM')) {
+    const available = readdirSync(imagesPath, { withFileTypes: true }).some((entry) => entry.isFile() && entry.name.toUpperCase().startsWith(flowPrefix + '_') && path.extname(entry.name).toLowerCase() === '.png');
+    if (!available) return { ok: false, message: `Không có file ${flowPrefix} trong folder Images.`, run: null };
+  }
+  const replacedDesigns = reconcileFixedDesignsBeforeRun(imagesPath);
+  if (command === 'sticker' || isStickerProduct(activeProduct)) {
     const stickerHolo = activeProduct === 'sticker-holo';
     const stickerRuntimePath = path.join(toolDir, '.runtime', stickerHolo ? 'sticker-holo-runtime.jsx' : 'sticker-vinyl-runtime.jsx');
     mkdirSync(path.dirname(stickerRuntimePath), { recursive: true });
-    const stickerPaths = { root: stickerHolo ? stickerHoloRoot : stickerRoot, template: folderPaths.template, images: folderPaths.Images, done: folderPaths.imgaes_done, error: folderPaths.images_error, wait: folderPaths.wait, waitMeta: folderPaths.wait_meta, noteDone: folderPaths.note_done, noteWork: folderPaths.note_work };
+    const stickerPaths = { root: stickerHolo ? stickerHoloRoot : stickerRoot, template: folderPaths.template, images: imagesPath, done: folderPaths.imgaes_done, error: folderPaths.images_error, wait: folderPaths.wait, waitMeta: folderPaths.wait_meta, noteDone: folderPaths.note_done, noteWork: folderPaths.note_work };
     const source = readFileSync(path.join(toolDir, 'scripts', 'sticker-stable.jsx'), 'utf8');
     const stickerSettings = loadStickerSettings();
-    const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_TEMPLATE_FILE: loadStickerTemplatePath(), CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork, CODEX_STICKER_OUTPUT_AI_DIR: folderPaths.output_ai }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_HOLO_MODE = ${stickerHolo};\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};`;
+    const prefix = Object.entries({ CODEX_STICKER_ROOT: stickerPaths.root, CODEX_STICKER_TEMPLATE_DIR: stickerPaths.template, CODEX_STICKER_TEMPLATE_FILE: loadStickerTemplatePath(), CODEX_STICKER_IMAGES_DIR: stickerPaths.images, CODEX_STICKER_DONE_DIR: stickerPaths.done, CODEX_STICKER_ERROR_DIR: stickerPaths.error, CODEX_STICKER_WAIT_DIR: stickerPaths.wait, CODEX_STICKER_WAIT_META_DIR: stickerPaths.waitMeta, CODEX_STICKER_NOTE_DONE_DIR: stickerPaths.noteDone, CODEX_STICKER_NOTE_WORK_DIR: stickerPaths.noteWork, CODEX_STICKER_OUTPUT_AI_DIR: folderPaths.output_ai }).map(([key, value]) => `var ${key} = ${JSON.stringify(value.replace(/\\/g, '/'))};`).join('\n') + `\nvar CODEX_STICKER_HOLO_MODE = ${stickerHolo};\nvar CODEX_STICKER_MARGIN_MM = ${stickerSettings.marginMm};\nvar CODEX_STICKER_GAP_MM = ${stickerSettings.gapMm};\nvar CODEX_FLOW_PREFIX = ${JSON.stringify(flowPrefix)};`;
     writeFileSync(stickerRuntimePath, prefix + '\n' + source, 'utf8');
     const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: [`> chạy Tool bundle: ${stickerHolo ? 'sticker-holo' : 'sticker'}`] };
-    launchPersistentOperation(run, 'cscript.exe', ['//nologo', path.join(toolDir, 'scripts', 'launch-illustrator-and-run.vbs'), stickerRuntimePath], { ACRYLIC_STICKER_MODE: '1' });
-    return { ok: true, message: 'Đã chạy Tool Sticker Vinyl.', run: activeRun };
+    launchPersistentOperation(run, 'cscript.exe', ['//nologo', path.join(toolDir, 'scripts', 'launch-illustrator-and-run.vbs'), stickerRuntimePath], { ACRYLIC_STICKER_MODE: '1', ACRYLIC_FLOW_PREFIX: flowPrefix });
+    if (replacedDesigns.length) activeRun?.logs.push(`Đã chuyển ${replacedDesigns.length} file design cũ sang images_error vì có bản FIXED thay thế.`);
+    return { ok: true, message: replacedDesigns.length ? `Đã chuyển ${replacedDesigns.length} file cũ sang images_error vì đã thay đổi design. Đang chạy Tool Sticker.` : 'Đã chạy Tool Sticker Vinyl.', run: activeRun };
   }
-  const commandEnv: Record<string, string> = command === 'check'
-    ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '1', ACRYLIC_CHECKPOINT_MODE: 'stop', ACRYLIC_JSX_BATCH_SIZE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '0' }
-    : command === 'test'
-      ? { ACRYLIC_TEST_IMPORT_ONE_IMAGE: '1', ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
-      : command === 'all'
-        ? { ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' }
-      : { ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_FAST_NO_FIT: '1', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1' };
-  const executablePath = command === 'test' ? path.join(toolDir, 'dist-bundle', 'test-import-one-image.cjs') : path.join(toolDir, 'dist-bundle', 'index.cjs');  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
-  launchPersistentOperation(run, nodeExecutable, [executablePath], commandEnv);
-  return { ok: true, message: 'Đã chạy Tool ' + command + '.', run: activeRun };
+  const finalCommandEnv: Record<string, string> = { ACRYLIC_IMAGES_DIR: imagesPath, ACRYLIC_TEST_PRECHECK: '1', ACRYLIC_IGNORE_CHECK_FALSE: '1', ACRYLIC_BYPASS_CHECKS: '1', ACRYLIC_ERROR_COMPARE_ONLY: '1', ACRYLIC_SKIP_DERIVED_OUTPUT_EXPORT: '1', ACRYLIC_FAST_NO_FIT: '0', ACRYLIC_CHECKPOINT_ITEM_LIMIT: '90', ACRYLIC_CHECKPOINT_MODE: 'continue', ACRYLIC_CHECKPOINT_PAUSE_MS: '0', ACRYLIC_JSX_BATCH_SIZE: String(Math.max(1, Math.min(90, Number(checkSettings.jsxBatchSize || 2)))), ACRYLIC_ITEM_STALL_TIMEOUT_MS: '60000', ACRYLIC_QUIT_ILLUSTRATOR_AFTER_SAVE: '0', ACRYLIC_CLOSE_DOCUMENT_AFTER_SAVE: '1', ACRYLIC_FLOW_PREFIX: flowPrefix };
+  const executablePath = path.join(toolDir, 'dist-bundle', 'index.cjs');  const run: ToolRun = { id: String(Date.now()), kind: 'tool', command, status: 'running', startedAt: new Date().toISOString(), lastLogAt: new Date().toISOString(), logs: ['> chạy Tool bundle: ' + command] };
+  launchPersistentOperation(run, nodeExecutable, [executablePath], finalCommandEnv);
+  if (replacedDesigns.length) activeRun?.logs.push(`Đã chuyển ${replacedDesigns.length} file design cũ sang images_error vì có bản FIXED thay thế.`);
+  return { ok: true, message: replacedDesigns.length ? `Đã chuyển ${replacedDesigns.length} file cũ sang images_error vì đã thay đổi design. Đang chạy Tool ${command}.` : 'Đã chạy Tool ' + command + '.', run: activeRun };
 }
 
 function listAcrylicTestImages() {
@@ -873,7 +926,7 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
       } else if (activeProduct !== 'label' && (rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed') && extension !== '.png') continue;
       // Illustrator writes this temporary file while Save As is in progress.
       // It is not a usable wait sheet and must never appear in the queue.
-      if (rootKey === 'wait' && (extension !== '.ai' || lowerName.endsWith('.saving.ai') || (isStickerProduct(activeProduct) ? !/(?:_wait_|^wait(?:_holo)?_[0-9]+(?:_[0-9]+)?\.ai$)/i.test(entry.name) : !/^wait_\d+(?:-\d+)?\.ai$/i.test(entry.name)))) continue;
+      if (rootKey === 'wait' && (extension !== '.ai' || lowerName.endsWith('.saving.ai') || (isStickerProduct(activeProduct) ? !/(?:_wait_|^(?:fba_|fbm_)?wait(?:_holo)?_[0-9]+(?:_[0-9]+)?\.ai$)/i.test(entry.name) : !/^(?:fba_|fbm_)?wait_\d+(?:-\d+)?(?:_\d+_\d+)?\.ai$/i.test(entry.name)))) continue;
       if (rootKey === 'output_ai' && (extension !== '.ai' || (activeProduct === 'acrylic' && !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
       if (rootKey === 'output_front' && (extension !== '.png' || !/_front\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_back' && (extension !== '.png' || !/_back\.png$/i.test(entry.name))) continue;
@@ -1279,7 +1332,7 @@ function localFilesystemApi(): Plugin {
               return;
             }
             const command = payload.command;
-            if (!['start', 'all', 'check', 'test', 'sticker', 'label'].includes(String(command))) {
+            if (!['start', 'fba', 'fbm', 'sticker', 'label'].includes(String(command))) {
               json(response, { ok: false, message: 'Lệnh Tool không hợp lệ.', run: toolStatus().run }, 400);
               return;
             }
@@ -1308,7 +1361,15 @@ function localFilesystemApi(): Plugin {
         }
         const current = await snapshot();
         if (url.pathname === '/api/v1/status') return json(response, current);
-        if (url.pathname === '/api/v1/queue') return json(response, current.folders.Images);
+        if (url.pathname === '/api/v1/queue') {
+          const flow = String(url.searchParams.get('flow') ?? '').toUpperCase();
+          if (flow === 'FBA' || flow === 'FBM') {
+            const root = flow === 'FBA' ? folderPaths.Images_FBA : folderPaths.Images_FBM;
+            const files = await scanFolder(root);
+            return json(response, files.filter((file) => file.name.toUpperCase().startsWith(flow + '_')));
+          }
+          return json(response, current.folders.Images);
+        }
         if (url.pathname === '/api/v1/errors') return json(response, current.folders.images_error);
         if (url.pathname === '/api/v1/processed') return json(response, current.folders.images_processed);
         if (url.pathname === '/api/v1/errors/processed') {

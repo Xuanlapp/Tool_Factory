@@ -52,6 +52,7 @@ const CLOSE_DOCUMENT_AFTER_SAVE = /^(1|true|yes)$/i.test(process.env.ACRYLIC_CLO
 const SHOULD_STOP_AFTER_CHECKPOINT = CHECKPOINT_MODE !== "continue";
 const JSX_BATCH_SIZE = (CHECK_FULL_PIPELINE || PREVIEW_SORT_ONLY) ? 1 : Math.max(1, Math.min(CHECKPOINT_ITEM_LIMIT, Number(process.env.ACRYLIC_JSX_BATCH_SIZE ?? (IGNORE_CHECK_FALSE ? 18 : CHECKPOINT_ITEM_LIMIT))));
 const PACK_GAP_CM = Math.max(0, Number(process.env.ACRYLIC_PACK_GAP_CM ?? 0.2));
+const FLOW_PREFIX = /^(FBA|FBM)$/i.test(String(process.env.ACRYLIC_FLOW_PREFIX ?? '')) ? String(process.env.ACRYLIC_FLOW_PREFIX).toUpperCase() + '_' : '';
 const FAST_NO_FIT = /^(1|true|yes)$/i.test(process.env.ACRYLIC_FAST_NO_FIT ?? 'true');
 const UI_REDRAW_EVERY = Math.max(1, Number(process.env.ACRYLIC_UI_REDRAW_EVERY ?? 5));
 const WAIT_MIN_CAP_INCH = Number(process.env.ACRYLIC_WAIT_MIN_CAP_INCH ?? 3);
@@ -238,6 +239,10 @@ async function getPngImages(directoryPath) {
     const entries = await readdir(directoryPath, { withFileTypes: true });
     const pngFiles = entries
         .filter((entry) => entry.isFile() && entry.name.toLowerCase().endsWith(".png"))
+        .filter((entry) => {
+        const flowPrefix = String(process.env.ACRYLIC_FLOW_PREFIX ?? '').trim();
+        return !flowPrefix || entry.name.toUpperCase().startsWith(flowPrefix.toUpperCase() + '_');
+    })
         .map((entry) => entry.name)
         .sort((left, right) => left.localeCompare(right, "en"));
     if (pngFiles.length === 0) {
@@ -835,7 +840,7 @@ async function buildOutputAiPath(sheetIndex) {
     await mkdir(folder, { recursive: true });
     let index = Math.max(1, sheetIndex);
     while (true) {
-        const filePath = path.join(folder, 'Acrylic_' + day + '_' + month + '_' + String(index).padStart(2, '0') + '.ai');
+        const filePath = path.join(folder, FLOW_PREFIX + 'Acrylic_' + day + '_' + month + '_' + String(index).padStart(2, '0') + '.ai');
         try {
             await access(filePath, constants.F_OK);
             index += 1;
@@ -847,7 +852,7 @@ async function buildOutputAiPath(sheetIndex) {
 }
 async function buildWaitAiPath(cap) {
     await mkdir(waitDir, { recursive: true });
-    const fileName = 'wait_' + formatSizeLabel(cap).replace(/in$/i, '') + '.ai';
+    const fileName = FLOW_PREFIX + 'wait_' + formatSizeLabel(cap).replace(/in$/i, '') + '.ai';
     return path.join(waitDir, fileName);
 }
 function shouldKeepAsWait(cap) {
