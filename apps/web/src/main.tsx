@@ -6,7 +6,7 @@ import { AppShell } from './layout/AppShell';
 import { ImagePreviewModal } from './components/ImagePreviewModal';
 import { getDashboardData, subscribeDashboard } from './api/repository';
 import type { DashboardData, DashboardSummary } from './api/types';
-import { DonePage, ErrorsPage, HistoryPage, OverviewPage, OutputsPage, ProcessedPage, QueuePage, SettingsPage, SheetsPage, TestPage, ToolPage } from './pages';
+import { DesignDownloadPage, DonePage, ErrorsPage, HistoryPage, OverviewPage, OutputsPage, ProcessedPage, QueuePage, SettingsPage, SheetsPage, TestPage, ToolPage } from './pages';
 import './styles.css';
 
 const queryClient = new QueryClient();
@@ -73,6 +73,7 @@ function DashboardRoutes() {
       <Route path="/queue" element={<QueuePage data={data} />} />
       <Route path="/tool" element={<ToolPage />} />
       <Route path="/test" element={<TestPage />} />
+      <Route path="/download" element={<DesignDownloadPage />} />
       <Route path="/sheets" element={<ToolPage />} />
       <Route path="/done" element={<DonePage data={data} />} />
       <Route path="/processed" element={<ProcessedPage data={data} />} />
@@ -90,6 +91,7 @@ function DashboardRoutes() {
       <Route path="/holo" element={<OverviewPage data={data} />} />
       <Route path="/holo/queue" element={<QueuePage data={data} />} />
       <Route path="/holo/tool" element={<ToolPage />} />
+      <Route path="/holo/download" element={<DesignDownloadPage />} />
       <Route path="/holo/done" element={<DonePage data={data} />} />
       <Route path="/holo/processed" element={<ProcessedPage data={data} />} />
       <Route path="/holo/errors" element={<ErrorsPage data={data} />} />
@@ -99,6 +101,7 @@ function DashboardRoutes() {
       <Route path="/sticker" element={<OverviewPage data={data} />} />
       <Route path="/sticker/queue" element={<QueuePage data={data} />} />
       <Route path="/sticker/tool" element={<ToolPage />} />
+      <Route path="/sticker/download" element={<DesignDownloadPage />} />
       <Route path="/sticker/done" element={<DonePage data={data} />} />
       <Route path="/sticker/processed" element={<ProcessedPage data={data} />} />
       <Route path="/sticker/errors" element={<ErrorsPage data={data} />} />
@@ -108,6 +111,7 @@ function DashboardRoutes() {
       <Route path="/sticker-holo" element={<OverviewPage data={data} />} />
       <Route path="/sticker-holo/queue" element={<QueuePage data={data} />} />
       <Route path="/sticker-holo/tool" element={<ToolPage />} />
+      <Route path="/sticker-holo/download" element={<DesignDownloadPage />} />
       <Route path="/sticker-holo/done" element={<DonePage data={data} />} />
       <Route path="/sticker-holo/processed" element={<ProcessedPage data={data} />} />
       <Route path="/sticker-holo/errors" element={<ErrorsPage data={data} />} />

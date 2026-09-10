@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { AlertTriangle, CheckCircle2, ChevronDown, FileText, FlaskConical, FolderOpen, History, LayoutDashboard, Layers3, ListTodo, Package, PanelLeftOpen, Settings, Sparkles, Sticker, Tag } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, Download, FileText, FlaskConical, FolderOpen, History, LayoutDashboard, Layers3, ListTodo, Package, PanelLeftOpen, Settings, Sparkles, Sticker, Tag } from 'lucide-react';
 import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '../components/utils';
 
@@ -17,6 +17,7 @@ const productGroups: ProductGroup[] = [
       { path: '/queue', label: 'Hàng chờ', icon: ListTodo },
       { path: '/tool', label: 'Tool', icon: Layers3 },
       { path: '/test', label: 'Test 1 ảnh', icon: FlaskConical },
+      { path: '/download', label: 'Tải ảnh từ Excel', icon: Download },
       { path: '/done', label: 'Đã xong', icon: CheckCircle2 },
       { path: '/processed', label: 'Processed', icon: CheckCircle2 },
       { path: '/errors', label: 'Ảnh lỗi', icon: AlertTriangle },
@@ -34,6 +35,7 @@ const productGroups: ProductGroup[] = [
       { path: '/holo', label: 'Tổng quan', icon: LayoutDashboard },
       { path: '/holo/queue', label: 'Hàng chờ', icon: ListTodo },
       { path: '/holo/tool', label: 'Tool', icon: Layers3 },
+      { path: '/holo/download', label: 'Tải ảnh từ Excel', icon: Download },
       { path: '/holo/done', label: 'Đã xong', icon: CheckCircle2 },
       { path: '/holo/processed', label: 'Processed', icon: CheckCircle2 },
       { path: '/holo/errors', label: 'Ảnh lỗi', icon: AlertTriangle },
@@ -46,10 +48,10 @@ const productGroups: ProductGroup[] = [
     { path: '/label', label: 'Tổng quan', icon: LayoutDashboard }, { path: '/label/queue', label: 'PDF chờ', icon: ListTodo }, { path: '/label/tool', label: 'Chạy Tool', icon: Layers3 }, { path: '/label/done', label: 'Đã xong', icon: CheckCircle2 }, { path: '/label/errors', label: 'Lỗi', icon: AlertTriangle }, { path: '/label/outputs', label: 'Output AI', icon: Package }, { path: '/label/settings', label: 'Cấu hình', icon: Settings },
   ] },
   { title: 'Sticker Vinyl', label: 'Sticker Vinyl', icon: Sticker, defaultOpen: false, items: [
-    { path: '/sticker', label: 'Tổng quan', icon: LayoutDashboard }, { path: '/sticker/queue', label: 'Hàng chờ', icon: ListTodo }, { path: '/sticker/tool', label: 'Tool', icon: Layers3 }, { path: '/sticker/done', label: 'Đã xong', icon: CheckCircle2 }, { path: '/sticker/processed', label: 'Processed', icon: CheckCircle2 }, { path: '/sticker/errors', label: 'Ảnh lỗi', icon: AlertTriangle }, { path: '/sticker/outputs', label: 'Thành phẩm', icon: Package }, { path: '/sticker/history', label: 'Lịch sử', icon: History }, { path: '/sticker/settings', label: 'Cấu hình', icon: Settings },
+    { path: '/sticker', label: 'Tổng quan', icon: LayoutDashboard }, { path: '/sticker/queue', label: 'Hàng chờ', icon: ListTodo }, { path: '/sticker/tool', label: 'Tool', icon: Layers3 }, { path: '/sticker/download', label: 'Tải ảnh từ Excel', icon: Download }, { path: '/sticker/done', label: 'Đã xong', icon: CheckCircle2 }, { path: '/sticker/processed', label: 'Processed', icon: CheckCircle2 }, { path: '/sticker/errors', label: 'Ảnh lỗi', icon: AlertTriangle }, { path: '/sticker/outputs', label: 'Thành phẩm', icon: Package }, { path: '/sticker/history', label: 'Lịch sử', icon: History }, { path: '/sticker/settings', label: 'Cấu hình', icon: Settings },
   ] },
   { title: 'Sticker Holo', label: 'Sticker Holo', icon: Sparkles, defaultOpen: false, items: [
-    { path: '/sticker-holo', label: 'Tổng quan', icon: LayoutDashboard }, { path: '/sticker-holo/queue', label: 'Hàng chờ', icon: ListTodo }, { path: '/sticker-holo/tool', label: 'Tool', icon: Layers3 }, { path: '/sticker-holo/done', label: 'Đã xong', icon: CheckCircle2 }, { path: '/sticker-holo/processed', label: 'Processed', icon: CheckCircle2 }, { path: '/sticker-holo/errors', label: 'Ảnh lỗi', icon: AlertTriangle }, { path: '/sticker-holo/outputs', label: 'Thành phẩm', icon: Package }, { path: '/sticker-holo/history', label: 'Lịch sử', icon: History }, { path: '/sticker-holo/settings', label: 'Cấu hình', icon: Settings },
+    { path: '/sticker-holo', label: 'Tổng quan', icon: LayoutDashboard }, { path: '/sticker-holo/queue', label: 'Hàng chờ', icon: ListTodo }, { path: '/sticker-holo/tool', label: 'Tool', icon: Layers3 }, { path: '/sticker-holo/download', label: 'Tải ảnh từ Excel', icon: Download }, { path: '/sticker-holo/done', label: 'Đã xong', icon: CheckCircle2 }, { path: '/sticker-holo/processed', label: 'Processed', icon: CheckCircle2 }, { path: '/sticker-holo/errors', label: 'Ảnh lỗi', icon: AlertTriangle }, { path: '/sticker-holo/outputs', label: 'Thành phẩm', icon: Package }, { path: '/sticker-holo/history', label: 'Lịch sử', icon: History }, { path: '/sticker-holo/settings', label: 'Cấu hình', icon: Settings },
   ] },
 ];
 
@@ -70,7 +72,7 @@ function Sidebar() {
   const activeGroup = productGroups.find((group) => group.items.some((item) => item.path === '/' ? location.pathname === '/' : location.pathname === item.path || location.pathname.startsWith(`${item.path}/`)))?.title ?? 'Acrylic';
   const [openTitle, setOpenTitle] = useState(activeGroup);
   useEffect(() => setOpenTitle(activeGroup), [activeGroup]);
-  return <aside className="group/sidebar fixed inset-y-0 left-0 z-40 w-[72px] overflow-hidden border-r border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.04)] hover:w-[292px]"><div className="flex h-full w-[292px] flex-col"><div className="flex h-[92px] items-center gap-4 border-b border-slate-200 px-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600"><PanelLeftOpen className="h-5 w-5" /></div><div className="min-w-0 whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100"><div className="text-[24px] font-semibold tracking-[-0.04em] text-slate-900">Factory Hub</div><div className="mt-1 text-sm text-slate-500">v0.3.10</div></div></div><nav className="flex-1 space-y-5 overflow-y-auto px-2 py-5 group-hover/sidebar:px-4">{productGroups.map((group) => <ProductSection key={group.title} group={group} open={openTitle === group.title} onToggle={() => setOpenTitle((current) => current === group.title ? '' : group.title)} />)}</nav></div></aside>;
+  return <aside className="group/sidebar fixed inset-y-0 left-0 z-40 w-[72px] overflow-hidden border-r border-slate-200 bg-white shadow-[0_12px_40px_rgba(15,23,42,0.04)] hover:w-[292px]"><div className="flex h-full w-[292px] flex-col"><div className="flex h-[92px] items-center gap-4 border-b border-slate-200 px-4"><div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-slate-200 text-slate-600"><PanelLeftOpen className="h-5 w-5" /></div><div className="min-w-0 whitespace-nowrap opacity-0 group-hover/sidebar:opacity-100"><div className="text-[24px] font-semibold tracking-[-0.04em] text-slate-900">Factory Hub</div><div className="mt-1 text-sm text-slate-500">v0.3.11</div></div></div><nav className="flex-1 space-y-5 overflow-y-auto px-2 py-5 group-hover/sidebar:px-4">{productGroups.map((group) => <ProductSection key={group.title} group={group} open={openTitle === group.title} onToggle={() => setOpenTitle((current) => current === group.title ? '' : group.title)} />)}</nav></div></aside>;
 }
 
 export function AppShell({ currentFile, runnerStatus, illustratorConnected, children }: { currentFile: string; runnerStatus: string; illustratorConnected: boolean; children: ReactNode }) {

@@ -8,8 +8,11 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { PNG } from 'pngjs';
+import * as XLSX from 'xlsx';
 
 type FileEntry = { path: string; relativePath: string; name: string; sizeBytes: number; modifiedAt: string; errorMeta?: Record<string, unknown>; waitManifest?: Record<string, unknown> };
+type DownloadDesignRow = { row: number; flow: string; item: string; orderId: string; productName: string; productId: string; quantity: string; size: string; designUrl: string; fileName: string };
+type DownloadDesignResult = { row: number; fileName: string; ok: boolean; message: string };
 
 function fixVietnameseMojibake(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(fixVietnameseMojibake);
@@ -996,6 +999,100 @@ function json(response: import('node:http').ServerResponse, value: unknown, stat
   response.end(JSON.stringify(value));
 }
 
+function normalizeExcelColumn(value: unknown) {
+  return String(value ?? '').trim().toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function getGoogleDriveDownloadUrl(value: string) {
+  const fileId = value.match(/\/d\/([\w-]+)/)?.[1] ?? value.match(/[?&]id=([\w-]+)/)?.[1];
+  return fileId ? `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t` : value;
+}
+
+function filenamePart(value: string, fallback: string) {
+  const result = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+  return result || fallback;
+}
+
+function buildDesignFileName(row: Omit<DownloadDesignRow, 'fileName'>, pattern: string) {
+  const values: Record<string, string> = {
+    flow: filenamePart(row.flow, 'design').toUpperCase(),
+    orderId: filenamePart(row.orderId, '0'),
+    item: row.item,
+    productId: filenamePart(row.productId, '0'),
+    productName: filenamePart(row.productName, 'design'),
+    quantity: filenamePart(row.quantity, '1'),
+    size: filenamePart(row.size, ''),
+    row: String(row.row),
+  };
+  const stem = (pattern || '{{flow}}_{{orderId}}_{{item}}_{{productName}}-{{size}}-st_qty_{{quantity}}')
+    .replace(/{{(flow|item|orderId|productId|productName|size|quantity|row)}}/g, (_, key: string) => values[key])
+    .replace(/[^a-zA-Z0-9._-]+/g, '-')
+    .replace(/-+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  return `${stem || `design-${row.row}`}.png`;
+}
+
+function parseDesignWorkbook(encodedFile: string, fileName: string, pattern: string): DownloadDesignRow[] {
+  const input = Buffer.from(encodedFile, 'base64');
+  if (!input.length || input.length > 25 * 1024 * 1024) throw new Error('File Excel phải có dung lượng từ 1 byte đến 25 MB.');
+  const workbook = XLSX.read(input, { type: 'buffer', raw: false });
+  const firstSheet = workbook.Sheets[workbook.SheetNames[0] ?? ''];
+  if (!firstSheet) throw new Error(`Không đọc được sheet đầu tiên của ${fileName || 'file Excel'}.`);
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(firstSheet, { defval: '' });
+  if (!rows.length) throw new Error('Excel chưa có dòng dữ liệu nào.');
+  const itemCounts = new Map<string, number>();
+  return rows.map((source, index) => {
+    const columns = new Map(Object.entries(source).map(([key, value]) => [normalizeExcelColumn(key), String(value ?? '').trim()]));
+    const find = (...keys: string[]) => keys.map((key) => columns.get(normalizeExcelColumn(key))).find((value) => Boolean(value)) ?? '';
+    const orderKey = find('FBM/FBA') + ':' + find('Order ID');
+    const itemNumber = (itemCounts.get(orderKey) ?? 0) + 1;
+    itemCounts.set(orderKey, itemNumber);
+    const base = {
+      item: 'item' + itemNumber,
+      row: index + 2,
+      flow: find('FBM/FBA', 'FBM FBA'),
+      orderId: find('Order ID'),
+      productName: find('Product Name'),
+      productId: find('Product ID'),
+      quantity: find('Quantity'),
+      size: find('Size'),
+      designUrl: find('Link Design'),
+    };
+    return { ...base, fileName: buildDesignFileName(base, pattern) };
+  }).filter((row) => row.designUrl);
+}
+
+async function downloadDesignsFromWorkbook(payload: { fileBase64?: unknown; fileName?: unknown; namingPattern?: unknown; selectedRows?: unknown }, targetPaths: Record<string, string>) {
+  const fileBase64 = String(payload.fileBase64 ?? '');
+  const namingPattern = String(payload.namingPattern ?? '');
+  const parsedRows = parseDesignWorkbook(fileBase64, String(payload.fileName ?? ''), namingPattern);
+  if (payload.selectedRows !== undefined && (!Array.isArray(payload.selectedRows) || !payload.selectedRows.every(row => Number.isInteger(row) && row >= 2))) throw new Error('Danh sách dòng cần tải không hợp lệ.');
+  const selectedRows = Array.isArray(payload.selectedRows) ? new Set(payload.selectedRows) : null;
+  const rows = selectedRows ? parsedRows.filter(row => selectedRows.has(row.row)) : parsedRows;
+  if (!rows.length) throw new Error('Không tìm thấy cột Link Design có dữ liệu trong Excel.');
+  const results: DownloadDesignResult[] = [];
+  for (const row of rows) {
+    try {
+      const targetFolder = row.flow.toUpperCase() === 'FBA' ? (targetPaths.Images_FBA || targetPaths.Images) : row.flow.toUpperCase() === 'FBM' ? (targetPaths.Images_FBM || targetPaths.Images) : targetPaths.Images;
+      mkdirSync(targetFolder, { recursive: true });
+      const response = await fetch(getGoogleDriveDownloadUrl(row.designUrl), { redirect: 'follow', signal: AbortSignal.timeout(120_000) });
+      const contentType = response.headers.get('content-type') ?? '';
+      if (!response.ok) throw new Error(`Google Drive trả về HTTP ${response.status}.`);
+      if (!contentType.startsWith('image/')) throw new Error('Link không trả về file ảnh; hãy kiểm tra quyền chia sẻ Google Drive.');
+      const image = Buffer.from(await response.arrayBuffer());
+      if (!image.length) throw new Error('File ảnh tải về rỗng.');
+      const extension = contentType.includes('jpeg') ? '.jpg' : contentType.includes('webp') ? '.webp' : contentType.includes('gif') ? '.gif' : '.png';
+      const baseName = row.fileName.replace(/\.[^.]+$/, '');
+      const target = nextAvailableMoveTarget(path.join(targetFolder, `${baseName}${extension}`));
+      writeFileSync(target, image);
+      results.push({ row: row.row, fileName: path.basename(target), ok: true, message: `Đã lưu vào ${targetFolder}` });
+    } catch (error) {
+      results.push({ row: row.row, fileName: row.fileName, ok: false, message: error instanceof Error ? error.message : 'Không thể tải ảnh.' });
+    }
+  }
+  return { ok: results.every((result) => result.ok), total: results.length, downloaded: results.filter((result) => result.ok).length, failed: results.filter((result) => !result.ok).length, results };
+}
+
 function writeTinyPngFallback(response: import('node:http').ServerResponse) {
   const png = new PNG({ width: 1, height: 1 });
   png.data[0] = 248; png.data[1] = 250; png.data[2] = 252; png.data[3] = 255;
@@ -1217,6 +1314,29 @@ function localFilesystemApi(): Plugin {
         if (url.pathname === '/api/v1/setup/run') {
           if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
           return json(response, runMachineSetup());
+        }
+        if (url.pathname === '/api/v1/design-download/import' || url.pathname === '/api/v1/design-download/preview') {
+          const targetPaths = { ...folderPaths };
+          if (request.method !== 'POST') { response.statusCode = 405; response.end('METHOD_NOT_ALLOWED'); return; }
+          let body = '';
+          request.on('data', (chunk) => {
+            body += String(chunk);
+            if (body.length > 36 * 1024 * 1024) request.destroy(new Error('Excel quá lớn.'));
+          });
+          request.on('end', async () => {
+            try {
+              const payload = JSON.parse(body || '{}') as { fileBase64?: unknown; fileName?: unknown; namingPattern?: unknown; selectedRows?: unknown };
+              if (url.pathname.endsWith('/preview')) {
+                const rows = parseDesignWorkbook(String(payload.fileBase64 ?? ''), String(payload.fileName ?? ''), String(payload.namingPattern ?? ''));
+                return json(response, { ok: true, rows, folders: targetPaths });
+              }
+              const result = await downloadDesignsFromWorkbook(payload, targetPaths);
+              json(response, result, result.ok ? 200 : 207);
+            } catch (error) {
+              json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể đọc Excel hoặc tải ảnh.' }, 400);
+            }
+          });
+          return;
         }
         if (url.pathname === '/api/v1/test/images') {
           const templatePath = path.join(folderPaths.template ?? path.join(factoryRoot, 'template'), 'Template_UVDTF.ai');

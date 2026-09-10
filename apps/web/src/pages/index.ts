@@ -5,3 +5,4 @@ export { HistoryPage, SettingsPage } from './history-settings';
 
 export { ToolPage } from './tool';
 export { TestPage } from './test';
+export { DesignDownloadPage } from './design-download';

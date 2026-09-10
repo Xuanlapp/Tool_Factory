@@ -311,6 +311,9 @@ KẾT LUẬN
                 currentSheetLayers = [];
                 currentSheetDoneFiles = [];
                 placedOnSheetCount = 0;
+                // A size that was full on the previous sheet must be tried
+                // again on this fresh template sheet.
+                blockedSizeKeys = {};
             }
             // ==========================================
             // Táº O JOBS
@@ -437,6 +440,22 @@ KẾT LUẬN
                         } catch (e) { }
 
                         if (ok) {
+                            // If only part of a high-qty image fit, save this
+                            // sheet then put the renamed remaining qty on a new
+                            // template instead of silently ending the job.
+                            if (info.remainingQtyForNextSheet > 0) {
+                                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder);
+                                var remainingName = buildFileNameWithQty(info, info.remainingQtyForNextSheet, getExt(file.name));
+                                pendingJobs[j].file = new File(file.parent.fsName + "/" + remainingName);
+                                info.qty = info.remainingQtyForNextSheet;
+                                delete info.remainingQtyForNextSheet;
+                                pendingJobs[j].info = info;
+                                blockedSizeKeys = {};
+                                openNextStickerSheet();
+                                placedSomethingThisRound = true;
+                                continue;
+                            }
+
                             pendingJobs.splice(j, 1);
                             delete jobFailureCount[jobKey];
                             j--;
@@ -561,6 +580,8 @@ KẾT LUẬN
                 }
                 if (placedThisFile > 0) {
                     var remainQty = quantity - placedThisFile;
+
+                    info.remainingQtyForNextSheet = remainQty;
 
                     queueDoneFileForCurrentSheet(file, info, placedThisFile, remainQty);
 

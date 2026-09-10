@@ -80,6 +80,7 @@ export function ToolPage() {
     snapshotEvents.addEventListener('snapshot', (event) => {
       const snapshot = JSON.parse((event as MessageEvent).data) as SnapshotEvent;
       setImagesCount(Number(snapshot.kpi?.queue ?? 0));
+      refreshImagesCount();
     });
     const refreshImagesCount = () => {
       void fetch(`${apiBase}/queue`, { cache: 'no-store' })
@@ -89,8 +90,9 @@ export function ToolPage() {
       for (const flow of ['FBA', 'FBM'] as const) void fetch(`${apiBase}/queue?flow=${flow}`, { cache: 'no-store' }).then((response) => response.ok ? response.json() : []).then((files: unknown[]) => setFlowCounts((current) => ({ ...current, [flow]: Array.isArray(files) ? files.length : 0 }))).catch(() => undefined);
     };
     refreshImagesCount();
+    const refreshTimer = window.setInterval(refreshImagesCount, 2_000);
     window.addEventListener('acrylic:folders-changed', refreshImagesCount);
-    return () => { events.close(); snapshotEvents.close(); window.removeEventListener('acrylic:folders-changed', refreshImagesCount); };
+    return () => { events.close(); snapshotEvents.close(); window.clearInterval(refreshTimer); window.removeEventListener('acrylic:folders-changed', refreshImagesCount); };
   }, []);
 
   useEffect(() => {
