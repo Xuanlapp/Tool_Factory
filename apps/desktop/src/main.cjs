@@ -53,11 +53,13 @@ function updateProgress(percent, transferred, total) {
 
 function setupAutoUpdater() {
   if (!app.isPackaged || debug || process.env.ACRYLIC_DISABLE_AUTO_UPDATE === '1') return;
+  autoUpdater.setFeedURL({ provider: 'github', owner: 'Xuanlapp', repo: 'Tool_Factory' });
+  autoUpdater.logger = { info: (...args) => console.log('[updater]', ...args), warn: (...args) => console.warn('[updater]', ...args), error: (...args) => console.error('[updater]', ...args), debug: (...args) => console.debug('[updater]', ...args) };
   autoUpdater.autoDownload = false;
   autoUpdater.autoInstallOnAppQuit = false;
   autoUpdater.on('error', (error) => { closeUpdateProgressWindow(); console.error('Không thể cập nhật:', error.message); });
   autoUpdater.on('update-available', async (info) => {
-    const result = await dialog.showMessageBox({ type: 'info', buttons: ['Tải bản mới', 'Để sau'], defaultId: 0, cancelId: 1, title: 'Có bản cập nhật mới', message: `Acrylic Factory ${info.version} đã có sẵn.`, detail: 'Bản cập nhật sẽ được tải nền và chỉ cài khi bạn xác nhận.' });
+    const result = await dialog.showMessageBox({ type: 'info', buttons: ['Tải bản mới', 'Để sau'], defaultId: 0, cancelId: 1, title: 'Có bản cập nhật mới', message: `Factory Hub ${info.version} đã có sẵn.`, detail: 'Bản cập nhật sẽ được tải nền và chỉ cài khi bạn xác nhận.' });
     if (result.response !== 0) return;
     try { showUpdateProgressWindow(); await autoUpdater.downloadUpdate(); }
     catch (error) { closeUpdateProgressWindow(); await dialog.showMessageBox({ type: 'error', buttons: ['OK'], title: 'Tải cập nhật thất bại', message: 'Không thể tải bản cập nhật.', detail: error.message }); }
@@ -72,8 +74,9 @@ function setupAutoUpdater() {
       autoUpdater.quitAndInstall(false, true);
     }
   });
-  void autoUpdater.checkForUpdates().catch(() => {});
-  setInterval(() => { void autoUpdater.checkForUpdates().catch(() => {}); }, 6 * 60 * 60 * 1000);
+  const check = () => autoUpdater.checkForUpdates().catch((error) => console.error('[updater] Không kiểm tra được cập nhật:', error.message));
+  setTimeout(check, 5_000);
+  setInterval(check, 6 * 60 * 60 * 1000);
 }
 function bundleRoot() {
   if (app.isPackaged) return path.join(process.resourcesPath, 'bundle');
