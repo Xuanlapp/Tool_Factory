@@ -16,7 +16,7 @@
         "typescript": "latest"
     },
     "productName": "Factory Hub",
-    "version": "0.3.9",
+    "version": "0.3.10",
     "main": "src/main.cjs",
     "build": {
         "appId": "com.ffactory.acrylic",
