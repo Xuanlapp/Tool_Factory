@@ -142,6 +142,17 @@ KẾT LUẬN
         var OLD_USER_INTERACTION_LEVEL = app.userInteractionLevel;
         var CURRENTWORKFILE = null;
 
+        // DoJavaScriptFile does not return $.writeln output to the app. Keep a
+        // small local trace so a stalled Illustrator step can be identified.
+        function writeStickerDebugLog(message) {
+            try {
+                var logFile = new File(IMAGE_FOLDER + "/sticker-debug.log");
+                logFile.open("a");
+                logFile.writeln("[" + new Date().toString() + "] " + message);
+                logFile.close();
+            } catch (e) { }
+        }
+
         function getTodayFolder(basePath) {
             var d = new Date();
 
@@ -385,6 +396,7 @@ KẾT LUẬN
                     }
 
                     try {
+                        writeStickerDebugLog("START file=" + file.name + " size=" + info.sizeText + " qty=" + info.qty);
                         var masterLayerName = makeUniqueLayerName(
                             doc,
                             AUTO_LAYER_PREFIX + info.id + " - " + info.sizeText + " - master - STT " + info.stt
@@ -466,6 +478,7 @@ KẾT LUẬN
                         continue;
 
                     } catch (errJob) {
+                        writeStickerDebugLog("FILE_ERROR file=" + file.name + " message=" + getErrorMessage(errJob));
                         $.writeln("File lá»—i: " + file.fsName + " | " + getErrorMessage(errJob));
                         jobFailureCount[jobKey]++;
                         // KhÃ´ng xÃ³a ngay, Ä‘á»ƒ vÃ²ng for tiáº¿p tá»¥c thá»­ file khÃ¡c
@@ -712,6 +725,7 @@ KẾT LUẬN
         } catch (e) {
             removeWorkNote();
             try { app.userInteractionLevel = OLD_USER_INTERACTION_LEVEL; } catch (restoreErr) { }
+            writeStickerDebugLog("FATAL " + getErrorMessage(e));
         }
 
         /**
@@ -1690,8 +1704,8 @@ KẾT LUẬN
             var cleanName = cleanFileName(fileName);
             var base = stripExt(cleanName);
 
-            // ID: lấy số đầu tiên trước "_item"
-            var idMatch = base.match(/^(\d+)_item/i);
+            // FBA_/FBM_ chỉ là nhãn luồng; phần tên phía sau vẫn dùng quy tắc Sticker cũ.
+            var idMatch = base.match(/^(?:(?:FBA|FBM)_)?(\d+)_item/i);
             if (!idMatch) {
                 throw new Error("Không đọc được ID từ file: " + fileName);
             }
@@ -1769,11 +1783,12 @@ KẾT LUẬN
 
         function logProcessStep(stepName, file, useInvert) {
             try {
-                $.writeln(
+                var message =
                     "[process-step] " + stepName +
                     " | file=" + (file ? file.fsName : "") +
-                    " | invert=" + (useInvert === false ? "false" : "true")
-                );
+                    " | invert=" + (useInvert === false ? "false" : "true");
+                $.writeln(message);
+                writeStickerDebugLog(message);
             } catch (e) { }
         }
 

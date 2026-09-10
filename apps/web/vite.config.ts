@@ -587,7 +587,8 @@ function syncPersistentOperation() {
       const recentLogs = result.status === 'error' ? [...activeRun.logs].reverse() : [];
       const failureDetail = recentLogs.find((line) => /Failed to run JSX.*EXPORT_[A-Z_]+:|PermissionError|EXPORT_[A-Z_]+:/i.test(line))
         ?? recentLogs.find((line) => /Failed to run JSX|Test export failed|PermissionError/i.test(line));
-      activeRun.logs.push(result.status === 'completed' ? 'Export hoàn tất thành công.' : `Export thất bại \(mã ${result.exitCode ?? 'không xác định'}).`);
+      const operationLabel = activeRun.kind === 'export' ? 'Export' : 'Tool';
+      activeRun.logs.push(result.status === 'completed' ? `${operationLabel} hoàn tất thành công.` : `${operationLabel} thất bại (mã ${result.exitCode ?? 'không xác định'}).`);
       activeRun.endedAt = result.endedAt ?? new Date().toISOString();
       if (result.message) activeRun.logs.push(result.message);
       else if (failureDetail) activeRun.logs.push('Chi tiết: ' + failureDetail);
@@ -796,8 +797,11 @@ function runTool(command: ToolCommand) {
   const flowPrefix = command === 'fba' ? 'FBA' : command === 'fbm' ? 'FBM' : '';
   const imagesPath = flowImagesPath(flowPrefix);
   if ((flowPrefix === 'FBA' || flowPrefix === 'FBM')) {
-    const available = readdirSync(imagesPath, { withFileTypes: true }).some((entry) => entry.isFile() && entry.name.toUpperCase().startsWith(flowPrefix + '_') && path.extname(entry.name).toLowerCase() === '.png');
-    if (!available) return { ok: false, message: `Không có file ${flowPrefix} trong folder Images.`, run: null };
+    const allowedExtensions = new Set(['.png']);
+    const available = readdirSync(imagesPath, { withFileTypes: true }).some((entry) => entry.isFile() && entry.name.toUpperCase().startsWith(flowPrefix + '_') && allowedExtensions.has(path.extname(entry.name).toLowerCase()));
+    if (!available) {
+      return { ok: false, message: `Không có file ${flowPrefix}_ trong folder Images.`, run: null };
+    }
   }
   const replacedDesigns = reconcileFixedDesignsBeforeRun(imagesPath);
   if (command === 'sticker' || isStickerProduct(activeProduct)) {
