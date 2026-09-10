@@ -176,7 +176,9 @@ KẾT LUẬN
             if (!waitFolder.exists) return null;
 
             var waitFiles = waitFolder.getFiles(function (f) {
-                return f instanceof File && /\.ai$/i.test(f.name) && /_wait_/i.test(f.name);
+                if (!(f instanceof File) || !/\.ai$/i.test(f.name) || !/_wait_/i.test(f.name)) return false;
+                var flowPrefix = typeof CODEX_FLOW_PREFIX !== "undefined" ? String(CODEX_FLOW_PREFIX).toUpperCase() : "";
+                return !flowPrefix || f.name.toUpperCase().indexOf(flowPrefix + "_") === 0;
             });
 
             if (!waitFiles || waitFiles.length === 0) return null;
@@ -1088,7 +1090,8 @@ KẾT LUẬN
             if (!waitFolder.exists) waitFolder.create();
             if (waitMetaFolder && !waitMetaFolder.exists) waitMetaFolder.create();
 
-            var baseName = RUN_WAIT_MODE ? WAIT_BASE_NAME : makeTimeFileName();
+            var flowPrefix = typeof CODEX_FLOW_PREFIX !== "undefined" ? String(CODEX_FLOW_PREFIX).toUpperCase() : "";
+            var baseName = RUN_WAIT_MODE ? WAIT_BASE_NAME : (flowPrefix ? flowPrefix + "_" : "") + makeTimeFileName();
             var waitInfo = getWaitInfo(packer);
             var isWaitSave = (forceWaitSave === true) || (waitInfo && waitInfo.count > 0);
 
@@ -1103,7 +1106,8 @@ KẾT LUẬN
             var saveFolder = isWaitSave ? waitFolder : outFolder;
             var saveBaseName = baseName;
             if (isWaitSave) {
-                saveBaseName = baseName + "_wait_" + String(waitInfo.inch).replace(".", "_");
+                // Keep one stable wait file per flow, e.g. FBA_wait_19.ai.
+                saveBaseName = (flowPrefix ? flowPrefix : "WAIT") + "_wait_" + String(waitInfo.inch).replace(".", "_");
             }
 
             // When resuming wait mode, update wait-meta.json immediately to save current usedRects state
