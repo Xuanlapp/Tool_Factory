@@ -753,7 +753,8 @@ async function createBatchRuntimeJsx(jsxTemplatePath, openTemplatePath, batchIte
     await writeFile(runtimePath, runtimeSource, "utf8");
     return runtimePath;
 }
-const waitAiFileNamePattern = /^wait_(\d+(?:-\d+)?)\.ai(?:\.ai)?$/i;
+const waitAiFileNamePattern = /^(?:FBA_|FBM_)?wait_(\d+(?:[-_]\d+)?)\.ai(?:\.ai)?$/i;
+function matchesWaitFlow(name) { const prefix = name.match(/^(FBA|FBM)_/i); return prefix ? prefix[0].toUpperCase() === FLOW_PREFIX : !FLOW_PREFIX; }
 const waitManifestSuffix = '.manifest.json';
 async function normalizeLegacyWaitAiFiles() {
     try {
@@ -780,7 +781,7 @@ async function getWaitAiFile() {
     try {
         const entries = await readdir(waitDir, { withFileTypes: true });
         const aiEntries = await Promise.all(entries
-            .filter((entry) => entry.isFile() && waitAiFileNamePattern.test(entry.name))
+            .filter((entry) => entry.isFile() && waitAiFileNamePattern.test(entry.name) && matchesWaitFlow(entry.name))
             .map(async (entry) => ({ name: entry.name, modifiedAt: (await stat(path.join(waitDir, entry.name))).mtimeMs })));
         if (aiEntries.length === 0)
             return null;
@@ -789,7 +790,7 @@ async function getWaitAiFile() {
             console.log('Multiple wait AI files found; using newest: ' + aiEntries[0].name);
         const name = aiEntries[0].name;
         const match = name.match(waitAiFileNamePattern);
-        const cap = match ? Number(match[1].replace('-', '.')) : null;
+        const cap = match ? Number(match[1].replace(/[-_]/, '.')) : null;
         return { filePath: path.join(waitDir, name), cap };
     }
     catch {

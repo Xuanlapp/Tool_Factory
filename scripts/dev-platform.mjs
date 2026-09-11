@@ -55,4 +55,4 @@ process.on('uncaughtException', (error) => {
   stopAll(1);
 });
 
-process.stdout.write('Acrylic platform started in one terminal. Open http://127.0.0.1:5173/\nPress Ctrl+C to stop all services.\n');
+process.stdout.write('Acrylic platform started in one terminal. Open http://127.0.0.1:5174/\nPress Ctrl+C to stop all services.\n');

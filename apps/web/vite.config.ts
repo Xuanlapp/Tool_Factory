@@ -157,9 +157,6 @@ const defaultStickerFolderPaths: Record<string, string> = {
   imgaes_done: path.join(stickerRoot, 'image-done'),
   wait: path.join(stickerRoot, 'wait'),
   output_ai: path.join(stickerRoot, 'output_ai'),
-  output_front: path.join(stickerRoot, 'output_front'),
-  output_back: path.join(stickerRoot, 'output_back'),
-  output_lazer: path.join(stickerRoot, 'output_lazer'),
   template: path.join(stickerRoot, 'template'),
   wait_meta: path.join(stickerRoot, 'wait-meta'),
   note_done: path.join(stickerRoot, 'note_done'),
@@ -174,9 +171,6 @@ const defaultStickerHoloFolderPaths: Record<string, string> = {
   imgaes_done: path.join(stickerHoloRoot, 'image-done'),
   wait: path.join(stickerHoloRoot, 'wait'),
   output_ai: path.join(stickerHoloRoot, 'output_ai'),
-  output_front: path.join(stickerHoloRoot, 'output_front'),
-  output_back: path.join(stickerHoloRoot, 'output_back'),
-  output_lazer: path.join(stickerHoloRoot, 'output_lazer'),
   template: path.join(stickerHoloRoot, 'template'),
   wait_meta: path.join(stickerHoloRoot, 'wait-meta'),
   note_done: path.join(stickerHoloRoot, 'note_done'),
@@ -193,7 +187,7 @@ function isStickerProduct(product: string) { return product === 'sticker' || pro
 function folderSettingsFile(product = 'acrylic') { return product === 'label' ? labelFolderSettingsPath : product === 'holo' ? holoFolderSettingsPath : product === 'sticker-holo' ? stickerHoloFolderSettingsPath : product === 'sticker' ? stickerFolderSettingsPath : folderSettingsPath; }
 function defaultPathsFor(product = 'acrylic') { return product === 'label' ? defaultLabelFolderPaths : product === 'holo' ? defaultHoloFolderPaths : product === 'sticker-holo' ? defaultStickerHoloFolderPaths : product === 'sticker' ? defaultStickerFolderPaths : defaultFolderPaths; }
 function defaultFolderRootFor(product = 'acrylic') { return product === 'label' ? labelRoot : product === 'sticker-holo' ? stickerHoloRoot : product === 'sticker' ? stickerRoot : factoryRoot; }
-function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; const paths = { ...defaultPathsFor(product), ...saved }; if (product !== 'label' && paths.Images && (paths.Images_FBA === path.join(factoryRoot, 'Images') || !saved.Images_FBA)) paths.Images_FBA = paths.Images; if (product !== 'label' && paths.Images && (paths.Images_FBM === path.join(factoryRoot, 'Images') || !saved.Images_FBM)) paths.Images_FBM = paths.Images; return paths; } catch { const defaults = defaultPathsFor(product); if (product !== 'label') { defaults.Images_FBA = defaults.Images; defaults.Images_FBM = defaults.Images; } return defaults; } }
+function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; const paths = { ...defaultPathsFor(product), ...saved }; if (isStickerProduct(product)) { delete paths.output_front; delete paths.output_back; delete paths.output_lazer; } if (product !== 'label' && paths.Images && (paths.Images_FBA === path.join(factoryRoot, 'Images') || !saved.Images_FBA)) paths.Images_FBA = paths.Images; if (product !== 'label' && paths.Images && (paths.Images_FBM === path.join(factoryRoot, 'Images') || !saved.Images_FBM)) paths.Images_FBM = paths.Images; return paths; } catch { const defaults = defaultPathsFor(product); if (product !== 'label') { defaults.Images_FBA = defaults.Images; defaults.Images_FBM = defaults.Images; } return defaults; } }
 function saveFolderPaths(next: Record<string, string>, product = 'acrylic') { const settingsPath = folderSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 type CheckSettings = { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number; jsxBatchSize: number; itemGapCm: number };
 type StickerSettings = { marginMm: number; gapMm: number };
@@ -911,10 +905,12 @@ async function runAcrylicTestFromImage(inputPath: string, sideCount: number) {
 }
 
 ensureOperationMonitor();
-async function scanFolder(root: string): Promise<FileEntry[]> {
+async function scanFolder(root: string | undefined): Promise<FileEntry[]> {
+  if (!root) return [];
+  const folderRoot = root;
   const files: FileEntry[] = [];
   let errorMetadata: Record<string, Record<string, unknown>> = {};
-  if (path.resolve(root).toLowerCase() === path.resolve(folderPaths.images_error).toLowerCase()) {
+  if (path.resolve(folderRoot).toLowerCase() === path.resolve(folderPaths.images_error).toLowerCase()) {
     try { errorMetadata = fixVietnameseMojibake(JSON.parse(readFileSync(path.join(root, '.error-metadata.json'), 'utf8'))) as Record<string, Record<string, unknown>>; } catch {}
   }
   async function walk(current: string) {
@@ -925,7 +921,7 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
       if (entry.isDirectory()) { await walk(fullPath); continue; }
       const lowerName = entry.name.toLowerCase();
       if (!entry.isFile() || entry.name === '.error-metadata.json' || lowerName.endsWith('.manifest.json') || lowerName === 'thumbs.db' || lowerName === 'desktop.ini' || lowerName === '.ds_store' || lowerName.startsWith('~') || lowerName.endsWith('.tmp') || lowerName.endsWith('.bak') || lowerName.endsWith('.lock')) continue;
-      const rootKey = Object.entries(folderPaths).find(([, folder]) => path.resolve(folder).toLowerCase() === path.resolve(root).toLowerCase())?.[0];
+      const rootKey = Object.entries(folderPaths).find(([, folder]) => path.resolve(folder ?? '').toLowerCase() === path.resolve(folderRoot).toLowerCase())?.[0];
       const extension = path.extname(entry.name).toLowerCase();
       if (activeProduct === 'label' && ['Images', 'images_error', 'images_processed', 'imgaes_done'].includes(rootKey ?? '') && extension !== '.pdf') continue;
       if (isStickerProduct(activeProduct) && (rootKey === 'Images' || rootKey === 'images_error' || rootKey === 'images_processed')) {
@@ -946,11 +942,11 @@ async function scanFolder(root: string): Promise<FileEntry[]> {
         throw error;
       }
       let waitManifest: Record<string, unknown> | undefined;
-      if (path.resolve(root).toLowerCase() === path.resolve(folderPaths.wait).toLowerCase() && entry.name.toLowerCase().endsWith('.ai')) {
+      if (path.resolve(folderRoot).toLowerCase() === path.resolve(folderPaths.wait ?? factoryRoot).toLowerCase() && entry.name.toLowerCase().endsWith('.ai')) {
         const manifestPath = fullPath.replace(/\.ai$/i, '.manifest.json');
         try { waitManifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>; } catch {}
       }
-      files.push({ path: fullPath, relativePath: path.relative(root, fullPath), name: entry.name, sizeBytes: info.size, modifiedAt: info.mtime.toISOString(), errorMeta: errorMetadata[entry.name], waitManifest });
+      files.push({ path: fullPath, relativePath: path.relative(folderRoot, fullPath), name: entry.name, sizeBytes: info.size, modifiedAt: info.mtime.toISOString(), errorMeta: errorMetadata[entry.name], waitManifest });
     }
   }
   await walk(root);
@@ -971,7 +967,7 @@ async function snapshot(force = false): Promise<Snapshot> {
     if (normalizedLoaded.changed) saveFolderPaths(folderPaths, activeProduct);
     const folderHealth = Object.fromEntries(Object.entries(folderPaths).map(([key, folder]) => [key, canAccessFolder(folder)]));
     for (const [key, health] of Object.entries(folderHealth)) if (health.warning) folderPathWarnings[key] = health.warning;
-    const entries = await Promise.all(Object.entries(folderPaths).map(async ([key, folder]) => [key, await scanFolder(folder)] as const));
+    const entries = await Promise.all(Object.entries(folderPaths).filter(([, folder]) => Boolean(folder)).map(async ([key, folder]) => [key, await scanFolder(folder)] as const));
     const folders = Object.fromEntries(entries);
     const running = Boolean(activeChild && activeRun?.status === 'running');
     cachedSnapshot = {
@@ -1062,7 +1058,7 @@ function parseDesignWorkbook(encodedFile: string, fileName: string, pattern: str
   }).filter((row) => row.designUrl);
 }
 
-async function downloadDesignsFromWorkbook(payload: { fileBase64?: unknown; fileName?: unknown; namingPattern?: unknown; selectedRows?: unknown }, targetPaths: Record<string, string>) {
+async function downloadDesignsFromWorkbook(payload: { fileBase64?: unknown; fileName?: unknown; namingPattern?: unknown; selectedRows?: unknown }, targetPaths: Record<string, string>, pdfOnly = false) {
   const fileBase64 = String(payload.fileBase64 ?? '');
   const namingPattern = String(payload.namingPattern ?? '');
   const parsedRows = parseDesignWorkbook(fileBase64, String(payload.fileName ?? ''), namingPattern);
@@ -1072,16 +1068,19 @@ async function downloadDesignsFromWorkbook(payload: { fileBase64?: unknown; file
   if (!rows.length) throw new Error('Không tìm thấy cột Link Design có dữ liệu trong Excel.');
   const results: DownloadDesignResult[] = [];
   for (const row of rows) {
+    if (pdfOnly) row.fileName = row.fileName.replace(/\.png$/i, '.pdf');
     try {
       const targetFolder = row.flow.toUpperCase() === 'FBA' ? (targetPaths.Images_FBA || targetPaths.Images) : row.flow.toUpperCase() === 'FBM' ? (targetPaths.Images_FBM || targetPaths.Images) : targetPaths.Images;
       mkdirSync(targetFolder, { recursive: true });
       const response = await fetch(getGoogleDriveDownloadUrl(row.designUrl), { redirect: 'follow', signal: AbortSignal.timeout(120_000) });
       const contentType = response.headers.get('content-type') ?? '';
       if (!response.ok) throw new Error(`Google Drive trả về HTTP ${response.status}.`);
-      if (!contentType.startsWith('image/')) throw new Error('Link không trả về file ảnh; hãy kiểm tra quyền chia sẻ Google Drive.');
+      if (pdfOnly && contentType.startsWith('image/')) throw new Error('Chỉ nhận PDF cho Label. Không lưu file PNG/JPG hoặc ảnh khác.');
+      if (!pdfOnly && !contentType.startsWith('image/')) throw new Error('Link không trả về file ảnh; hãy kiểm tra quyền chia sẻ Google Drive.');
       const image = Buffer.from(await response.arrayBuffer());
       if (!image.length) throw new Error('File ảnh tải về rỗng.');
-      const extension = contentType.includes('jpeg') ? '.jpg' : contentType.includes('webp') ? '.webp' : contentType.includes('gif') ? '.gif' : '.png';
+      if (pdfOnly && image.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('File không phải PDF. Không lưu file này vào hàng chờ Label.');
+      const extension = pdfOnly ? '.pdf' : contentType.includes('jpeg') ? '.jpg' : contentType.includes('webp') ? '.webp' : contentType.includes('gif') ? '.gif' : '.png';
       const baseName = row.fileName.replace(/\.[^.]+$/, '');
       const target = nextAvailableMoveTarget(path.join(targetFolder, `${baseName}${extension}`));
       writeFileSync(target, image);
@@ -1328,9 +1327,9 @@ function localFilesystemApi(): Plugin {
               const payload = JSON.parse(body || '{}') as { fileBase64?: unknown; fileName?: unknown; namingPattern?: unknown; selectedRows?: unknown };
               if (url.pathname.endsWith('/preview')) {
                 const rows = parseDesignWorkbook(String(payload.fileBase64 ?? ''), String(payload.fileName ?? ''), String(payload.namingPattern ?? ''));
-                return json(response, { ok: true, rows, folders: targetPaths });
+                return json(response, { ok: true, rows: product === 'label' ? rows.map(row => ({ ...row, fileName: row.fileName.replace(/\.png$/i, '.pdf') })) : rows, folders: targetPaths });
               }
-              const result = await downloadDesignsFromWorkbook(payload, targetPaths);
+              const result = await downloadDesignsFromWorkbook(payload, targetPaths, product === 'label');
               json(response, result, result.ok ? 200 : 207);
             } catch (error) {
               json(response, { ok: false, message: error instanceof Error ? error.message : 'Không thể đọc Excel hoặc tải ảnh.' }, 400);
@@ -1475,7 +1474,7 @@ function localFilesystemApi(): Plugin {
           const send = async () => {
             const live = await snapshot();
             const running = live.runnerStatus === 'running';
-            response.write(`event: snapshot\ndata: ${JSON.stringify({ capturedAt: live.capturedAt, runnerStatus: live.runnerStatus, illustratorConnected: live.illustratorConnected, progress: live.runnerProgress ?? null, kpi: { queue: live.folders.Images.length, processing: running ? 1 : 0, done: live.folders.imgaes_done.length, errors: live.folders.images_error.length, wait: live.folders.wait.length, outputAi: live.folders.output_ai.length, outputFront: live.folders.output_front.length, outputBack: live.folders.output_back.length, outputLazer: live.folders.output_lazer.length } })}\n\n`);
+            response.write(`event: snapshot\ndata: ${JSON.stringify({ capturedAt: live.capturedAt, runnerStatus: live.runnerStatus, illustratorConnected: live.illustratorConnected, progress: live.runnerProgress ?? null, kpi: { queue: (live.folders.Images ?? []).length, processing: running ? 1 : 0, done: (live.folders.imgaes_done ?? []).length, errors: (live.folders.images_error ?? []).length, wait: (live.folders.wait ?? []).length, outputAi: (live.folders.output_ai ?? []).length, outputFront: live.folders.output_front?.length ?? 0, outputBack: live.folders.output_back?.length ?? 0, outputLazer: live.folders.output_lazer?.length ?? 0 } })}\n\n`);
             response.write(`event: tool\ndata: ${JSON.stringify(toolStatus())}\n\n`);
           };
           await send();
@@ -1525,7 +1524,7 @@ function localFilesystemApi(): Plugin {
           }); return;
         }
         if (url.pathname === '/api/v1/wait') return json(response, current.folders.wait);
-        if (url.pathname === '/api/v1/outputs') return json(response, { ai: current.folders.output_ai, front: current.folders.output_front, back: current.folders.output_back, lazer: current.folders.output_lazer });
+        if (url.pathname === '/api/v1/outputs') return json(response, { ai: current.folders.output_ai ?? [], front: current.folders.output_front ?? [], back: current.folders.output_back ?? [], lazer: current.folders.output_lazer ?? [] });
         if (url.pathname === '/api/v1/settings/folders') return json(response, { folderPaths, folderPathWarnings, checkSettings });
         if (url.pathname === '/api/v1/settings/sticker') {
           if (request.method === 'GET') return json(response, { stickerSettings: loadStickerSettings() });

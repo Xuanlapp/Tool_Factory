@@ -18,6 +18,7 @@ function DesignThumbnail({ url }: { url: string }) {
 }
 
 export function DesignDownloadPage() {
+  const pdfOnly = window.location.pathname.startsWith('/label/');
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const pattern = defaultPattern;
@@ -72,7 +73,7 @@ export function DesignDownloadPage() {
   };
 
   return <div className="space-y-6">
-    <SectionTitle title="Tải ảnh thiết kế" subtitle="Đọc file Excel, tải từng Link Design và đưa ảnh vào hàng chờ của sản phẩm đang mở." />
+    <SectionTitle title={pdfOnly ? "Tải PDF từ Excel" : "Tải ảnh thiết kế"} subtitle={pdfOnly ? "Chỉ lưu file PDF vào hàng chờ Label. PNG/JPG và các file không phải PDF sẽ được giữ lại trong danh sách lỗi." : "Đọc file Excel, tải từng Link Design và đưa ảnh vào hàng chờ của sản phẩm đang mở."} />
     <Panel className="p-6">
       <div className="space-y-4">
         <div className="rounded-2xl border border-dashed border-blue-300 bg-blue-50/40 p-6">

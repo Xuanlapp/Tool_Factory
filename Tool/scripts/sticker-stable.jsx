@@ -136,8 +136,8 @@ KẾT LUẬN
         var AUTO_LAYER_PREFIX = "__AUTO_BATCH__ ";
         var FAST_MODE = true;
         var MAX_IMAGES_BEFORE_WAIT = 50;
-        var SLEEP_SCALE = 0.35;
-        var MIN_SLEEP = 80;
+        var SLEEP_SCALE = 0.22;
+        var MIN_SLEEP = 50;
         var SHOW_WAIT_FIT_PREVIEW = false;
         var OLD_USER_INTERACTION_LEVEL = app.userInteractionLevel;
         var CURRENTWORKFILE = null;
@@ -453,6 +453,7 @@ KẾT LUẬN
                                 blockedSizeKeys = {};
                                 openNextStickerSheet();
                                 placedSomethingThisRound = true;
+                                j--;
                                 continue;
                             }
 
@@ -1897,18 +1898,18 @@ KẾT LUẬN
             logProcessStep("trace", file, useInvert);
             var traceObj = doc.selection[0].trace();
             safeRedraw();
-            fastSleep(2000);
+            fastSleep(500);
             var tracingObject = traceObj.tracing;
             var presetLoaded = tracingObject.tracingOptions.loadFromPreset("Silhouettes");
             if (presetLoaded !== true) throw new Error("Không tìm thấy Image Trace preset Silhouettes.");
             tracingObject.tracingOptions.ignoreWhite = true;
             safeRedraw();
-            fastSleep(800);
+            fastSleep(200);
             debugStep("4. Trace Silhouettes");
 
             logProcessStep("expandTracing", file, useInvert);
             tracingObject.expandTracing();
-            fastSleep(3000);
+            fastSleep(1000);
             safeRedraw();
             debugStep("5. Expand Tracing");
 

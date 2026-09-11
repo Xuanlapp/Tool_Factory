@@ -13,7 +13,7 @@
     "typecheck:platform": "npm run typecheck --workspaces --if-present",
     "dev:desktop": "npm run debug:app",
     "dev": "npm run dev:preflight && concurrently --kill-others-on-fail --names agent,api,web --prefix-colors green,cyan,magenta \"npm run dev:agent\" \"npm run dev:api\" \"npm run dev:web\"",
-    "dev:preflight": "node scripts/free-dev-ports.mjs 4320 5173",
+    "dev:preflight": "node scripts/free-dev-ports.mjs 4320 5174",
     "test:e2e:real": "node scripts/e2e-real.mjs",
     "debug:app": "node scripts/debug-app.mjs"
   },

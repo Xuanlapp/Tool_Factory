@@ -4,7 +4,7 @@ const { spawn } = require('node:child_process');
 const fs = require('node:fs');
 const path = require('node:path');
 
-const webUrl = process.env.ACRYLIC_WEB_URL || 'http://127.0.0.1:5173';
+const webUrl = process.env.ACRYLIC_WEB_URL || 'http://127.0.0.1:5174';
 const debug = /^(1|true|yes)$/i.test(process.env.ACRYLIC_DEBUG || '');
 let webProcess = null;
 let updateDownloaded = false;
@@ -12,7 +12,7 @@ let updateProgressWindow = null;
 
 async function isToolBusy() {
   try {
-    const response = await fetch('http://127.0.0.1:5173/api/v1/tool/status', { signal: AbortSignal.timeout(1500) });
+    const response = await fetch('http://127.0.0.1:5174/api/v1/tool/status', { signal: AbortSignal.timeout(1500) });
     if (!response.ok) return false;
     const payload = await response.json();
     return Boolean(payload?.running);
@@ -90,7 +90,7 @@ function startBundledWeb() {
   const webRoot = path.join(root, 'apps', 'web');
   if (!fs.existsSync(viteBin) || !fs.existsSync(webRoot)) throw new Error('Thiếu tài nguyên giao diện trong bộ cài.');
   const factoryRoot = process.env.ACRYLIC_FACTORY_ROOT || path.join(app.getPath('documents'), 'AcrylicFactory');
-  webProcess = spawn(process.execPath, [viteBin, '--host', '127.0.0.1', '--port', '5173', '--strictPort'], {
+  webProcess = spawn(process.execPath, [viteBin, '--host', '127.0.0.1', '--port', '5174', '--strictPort'], {
     cwd: webRoot,
     env: { ...process.env, ELECTRON_RUN_AS_NODE: '1', ACRYLIC_APP_ROOT: root, ACRYLIC_FACTORY_ROOT: factoryRoot },
     windowsHide: true,
@@ -154,7 +154,6 @@ app.whenReady().then(async () => {
 
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('will-quit', () => { if (webProcess?.pid) webProcess.kill(); });
-
 
 
 

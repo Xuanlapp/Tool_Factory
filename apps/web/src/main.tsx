@@ -83,6 +83,7 @@ function DashboardRoutes() {
       <Route path="/settings" element={<SettingsPage data={data} />} />
       <Route path="/label" element={<OverviewPage data={data} />} />
       <Route path="/label/queue" element={<QueuePage data={data} />} />
+      <Route path="/label/download" element={<DesignDownloadPage />} />
       <Route path="/label/tool" element={<ToolPage />} />
       <Route path="/label/done" element={<DonePage data={data} />} />
       <Route path="/label/errors" element={<ErrorsPage data={data} />} />
