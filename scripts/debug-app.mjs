@@ -1,11 +1,12 @@
-﻿import { spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 
 const root = process.cwd();
-const webUrl = process.env.ACRYLIC_WEB_URL ?? 'http://127.0.0.1:5174';
+const webUrl = process.env.ACRYLIC_WEB_URL ?? 'http://127.0.0.1:5275';
+const webPort = new URL(webUrl).port || '80';
 const commandShell = process.platform === 'win32' ? (process.env.ComSpec ?? 'C:\\Windows\\System32\\cmd.exe') : 'npm';
 const webArgs = process.platform === 'win32'
-  ? ['/d', '/s', '/c', 'npm --workspace @acrylic/web run dev -- --host 127.0.0.1 --port 5174']
-  : ['--workspace', '@acrylic/web', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', '5174'];
+  ? ['/d', '/s', '/c', `npm --workspace @acrylic/web run dev -- --host 127.0.0.1 --port ${webPort} --strictPort`]
+  : ['--workspace', '@acrylic/web', 'run', 'dev', '--', '--host', '127.0.0.1', '--port', webPort, '--strictPort'];
 
 const web = spawn(commandShell, webArgs, { cwd: root, stdio: 'inherit', windowsHide: true });
 let desktop = null;
@@ -51,3 +52,4 @@ try {
   console.error(error instanceof Error ? error.message : error);
   stop(1);
 }
+

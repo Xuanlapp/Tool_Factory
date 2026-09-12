@@ -190,9 +190,9 @@ function defaultFolderRootFor(product = 'acrylic') { return product === 'label' 
 function loadFolderPaths(product = 'acrylic'): Record<string, string> { try { const saved = JSON.parse(readFileSync(folderSettingsFile(product), 'utf8')) as Record<string, string>; const paths = { ...defaultPathsFor(product), ...saved }; if (isStickerProduct(product)) { delete paths.output_front; delete paths.output_back; delete paths.output_lazer; } if (product !== 'label' && paths.Images && (paths.Images_FBA === path.join(factoryRoot, 'Images') || !saved.Images_FBA)) paths.Images_FBA = paths.Images; if (product !== 'label' && paths.Images && (paths.Images_FBM === path.join(factoryRoot, 'Images') || !saved.Images_FBM)) paths.Images_FBM = paths.Images; return paths; } catch { const defaults = defaultPathsFor(product); if (product !== 'label') { defaults.Images_FBA = defaults.Images; defaults.Images_FBM = defaults.Images; } return defaults; } }
 function saveFolderPaths(next: Record<string, string>, product = 'acrylic') { const settingsPath = folderSettingsFile(product); mkdirSync(path.dirname(settingsPath), { recursive: true }); writeFileSync(settingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 type CheckSettings = { checkImageSize: boolean; checkTwoSideFaceOffset: boolean; faceToleranceCm: number; cutToleranceCm: number; jsxBatchSize: number; itemGapCm: number };
-type StickerSettings = { marginMm: number; gapMm: number };
+type StickerSettings = { marginMm: number; gapMm: number; debug: boolean };
 const defaultCheckSettings: CheckSettings = { checkImageSize: true, checkTwoSideFaceOffset: false, faceToleranceCm: 0.034, cutToleranceCm: 0.05, jsxBatchSize: 2, itemGapCm: 0.2 };
-const defaultStickerSettings: StickerSettings = { marginMm: 3, gapMm: 5 };
+const defaultStickerSettings: StickerSettings = { marginMm: 3, gapMm: 5, debug: false };
 function loadCheckSettings(): CheckSettings { try { const saved = JSON.parse(readFileSync(checkSettingsPath, 'utf8')) as Partial<CheckSettings>; return { ...defaultCheckSettings, ...saved }; } catch { return { ...defaultCheckSettings }; } }
 function saveCheckSettings(next: CheckSettings) { mkdirSync(path.dirname(checkSettingsPath), { recursive: true }); writeFileSync(checkSettingsPath, JSON.stringify(next, null, 2), 'utf8'); }
 function stickerSettingsFile(product = activeProduct) { return product === 'sticker-holo' ? stickerHoloSettingsPath : stickerSettingsPath; }
@@ -1535,7 +1535,7 @@ function localFilesystemApi(): Plugin {
         if (url.pathname === '/api/v1/settings/folders') return json(response, { folderPaths, folderPathWarnings, checkSettings });
         if (url.pathname === '/api/v1/settings/sticker') {
           if (request.method === 'GET') return json(response, { stickerSettings: loadStickerSettings() });
-          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as Partial<StickerSettings>; const next = { marginMm: Math.max(0, Number(parsed.marginMm ?? 3)), gapMm: Math.max(0, Number(parsed.gapMm ?? 5)) }; saveStickerSettings(next); return json(response, { ok: true, stickerSettings: next }); } catch { return json(response, { ok: false, message: 'Không thể lưu cấu hình Sticker.' }, 400); } });
+          let body=''; request.on('data', (chunk) => body += chunk); request.on('end', () => { try { const parsed = JSON.parse(body || '{}') as Partial<StickerSettings>; const next = { marginMm: Math.max(0, Number(parsed.marginMm ?? 3)), gapMm: Math.max(0, Number(parsed.gapMm ?? 5)), debug: Boolean(parsed.debug) }; saveStickerSettings(next); return json(response, { ok: true, stickerSettings: next }); } catch { return json(response, { ok: false, message: 'Không thể lưu cấu hình Sticker.' }, 400); } });
           return;
         }
         if (url.pathname === '/api/v1/settings/sticker/template') {
@@ -1673,6 +1673,7 @@ function localFilesystemApi(): Plugin {
 }
 
 export default defineConfig({ plugins: [localFilesystemApi(), react(), tailwindcss()] });
+
 
 
 

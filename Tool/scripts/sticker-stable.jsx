@@ -153,6 +153,21 @@ KẾT LUẬN
             } catch (e) { }
         }
 
+        function requireStickerDocument(currentDoc, fileName, step) {
+            var documentAvailable = false;
+            try {
+                if (currentDoc && app.documents.length > 0) {
+                    documentAvailable = currentDoc.typename === "Document" && currentDoc.layers.length >= 0;
+                }
+            } catch (documentError) { documentAvailable = false; }
+            if (!documentAvailable) {
+                var message = "NO_DOCUMENT step=" + step + " file=" + fileName;
+                writeStickerDebugLog(message);
+                throw new Error(message);
+            }
+            return currentDoc;
+        }
+
         function getTodayFolder(basePath) {
             var d = new Date();
 
@@ -254,7 +269,7 @@ KẾT LUẬN
                 throw new Error("Báº¡n cáº§n má»Ÿ sáºµn file Illustrator/template trÆ°á»›c khi cháº¡y script.");
             }
 
-            var doc = app.activeDocument;
+            var doc = requireStickerDocument(doc, currentJobName, "after-template-open");
 
             var folder = new Folder(IMAGE_FOLDER);
             if (!folder.exists) {
@@ -401,6 +416,7 @@ KẾT LUẬN
                     }
 
                     try {
+                        requireStickerDocument(doc, file.name, "before-artwork");
                         writeStickerDebugLog("START file=" + file.name + " size=" + info.sizeText + " qty=" + info.qty);
                         var masterLayerName = makeUniqueLayerName(
                             doc,
@@ -501,6 +517,11 @@ KẾT LUẬN
 
                     } catch (errJob) {
                         writeStickerDebugLog("FILE_ERROR file=" + file.name + " message=" + getErrorMessage(errJob));
+                        if (/NO_DOCUMENT|there is no document/i.test(getErrorMessage(errJob))) {
+                            writeStickerDebugLog("STOP_KEEP_QUEUE file=" + file.name + " reason=document-lost");
+                            stoppedByUser = true;
+                            break;
+                        }
                         $.writeln("File lá»—i: " + file.fsName + " | " + getErrorMessage(errJob));
                         jobFailureCount[jobKey]++;
                         // KhÃ´ng xÃ³a ngay, Ä‘á»ƒ vÃ²ng for tiáº¿p tá»¥c thá»­ file khÃ¡c
@@ -827,6 +848,7 @@ KẾT LUẬN
          */
         function createArtworkWithInvert(doc, file, layerName, targetSize, inch, actionSet, actionMerge, actionUnite, isSll) {
             try {
+                requireStickerDocument(doc, file.name, "invert-start");
                 return createArtworkCore(
                     doc,
                     file,
@@ -839,6 +861,8 @@ KẾT LUẬN
                     true
                 );
             } catch (err) {
+                writeStickerDebugLog("INVERT_ERROR file=" + file.name + " message=" + getErrorMessage(err));
+                if (/there is no document|NO_DOCUMENT/i.test(getErrorMessage(err))) throw err;
                 try {
                     $.writeln("Retry without invert for file: " + file.fsName + " | " + getErrorMessage(err));
                 } catch (logErr) { }
@@ -3309,3 +3333,5 @@ KẾT LUẬN
             return base + ext;
         }
     })();
+
+

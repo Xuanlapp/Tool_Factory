@@ -16,7 +16,7 @@
         "typescript": "latest"
     },
     "productName": "Factory Hub",
-    "version": "0.3.14",
+    "version": "0.3.15",
     "main": "src/main.cjs",
     "build": {
         "appId": "com.ffactory.acrylic",
@@ -140,6 +140,7 @@
         "electron-updater": "^6.8.9"
     }
 }
+
 
 
 
