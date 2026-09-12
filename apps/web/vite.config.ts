@@ -1531,6 +1531,7 @@ function localFilesystemApi(): Plugin {
         }
         if (url.pathname === '/api/v1/wait') return json(response, current.folders.wait);
         if (url.pathname === '/api/v1/outputs') return json(response, { ai: current.folders.output_ai ?? [], front: current.folders.output_front ?? [], back: current.folders.output_back ?? [], lazer: current.folders.output_lazer ?? [] });
+        if (url.pathname === '/api/v1/outputs/rename' && request.method === 'POST') { let body=''; request.on('data',(chunk)=>body+=chunk); request.on('end',()=>{ try { const parsed=JSON.parse(body||'{}') as { files?: unknown; baseName?: unknown }; const files=Array.isArray(parsed.files)?parsed.files.map(String):[]; const base=String(parsed.baseName??'').trim(); if(!files.length||!base) return json(response,{ok:false,message:'Vui lòng chọn file và nhập tên mới.'},400); const root=folderPaths.output_ai; const existing=new Set(readdirSync(root,{withFileTypes:true}).filter((e)=>e.isFile()).map((e)=>e.name.toLowerCase())); const results=[]; let number=1; for(const relative of files){ const source=resolveFileInside(root,relative); if(!source||!existsSync(source)) continue; while(existing.has(`${base} ${number}.ai`.toLowerCase())) number++; const targetName=`${base} ${number}.ai`; const target=path.join(path.dirname(source),targetName); renameSync(source,target); existing.add(targetName.toLowerCase()); results.push({from:path.basename(source),to:targetName}); number++; } cachedSnapshot=null; return json(response,{ok:true,message:`Đã đổi tên ${results.length} file.`,results}); } catch(error){ return json(response,{ok:false,message:error instanceof Error?error.message:'Không thể đổi tên file.'},400); } }); return; }
         if (url.pathname === '/api/v1/settings/folders') return json(response, { folderPaths, folderPathWarnings, checkSettings });
         if (url.pathname === '/api/v1/settings/sticker') {
           if (request.method === 'GET') return json(response, { stickerSettings: loadStickerSettings() });
@@ -1672,6 +1673,7 @@ function localFilesystemApi(): Plugin {
 }
 
 export default defineConfig({ plugins: [localFilesystemApi(), react(), tailwindcss()] });
+
 
 
 
