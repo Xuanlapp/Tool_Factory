@@ -39,10 +39,12 @@ function ResponsiveAppScale() {
   return null;
 }
 
-function Loading() { return <div className="flex min-h-screen items-center justify-center bg-[#f8faff] text-lg text-slate-500">Đang tải Acrylic Production...</div>; }
+function Loading({ error, retry }: { error?: unknown; retry?: () => void }) {
+  return <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-[#f8faff] text-lg text-slate-500"><div>{error ? 'Không kết nối được máy chủ nội bộ.' : 'Đang tải Acrylic Production...'}</div>{error ? <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white" onClick={retry}>Thử lại</button> : null}</div>;
+}
 
 function DashboardRoutes() {
-  const dashboard = useQuery({ queryKey: ['dashboard'], queryFn: getDashboardData, refetchInterval: 30_000, staleTime: 10_000 });
+  const dashboard = useQuery({ queryKey: ['dashboard'], queryFn: getDashboardData, refetchInterval: (query) => query.state.data?.summary.runnerStatus === 'running' ? 2_000 : 30_000, staleTime: 1_000 });
   const [live, setLive] = useState<Partial<DashboardSummary> | null>(null);
   const lastFolderFingerprint = useRef('');
   const [preview, setPreview] = useState<{ src: string; fileName: string } | null>(null);
@@ -65,6 +67,7 @@ function DashboardRoutes() {
     window.addEventListener('acrylic:preview-file', openPreview);
     return () => window.removeEventListener('acrylic:preview-file', openPreview);
   }, []);
+  if (dashboard.isError && !dashboard.data) return <Loading error={dashboard.error} retry={() => void dashboard.refetch()} />;
   if (!dashboard.data) return <Loading />;
   const data: DashboardData = live ? { ...dashboard.data, summary: { ...dashboard.data.summary, ...live, kpi: { ...dashboard.data.summary.kpi, ...live.kpi } } } : dashboard.data;
   return <> <ResponsiveAppScale />{preview ? <ImagePreviewModal src={preview.src} fileName={preview.fileName} onClose={() => setPreview(null)} /> : null}<AppShell currentFile={data.summary.currentFile} runnerStatus={data.summary.runnerStatus} illustratorConnected={data.summary.illustratorConnected}>

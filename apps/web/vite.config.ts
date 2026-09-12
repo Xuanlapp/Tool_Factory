@@ -769,8 +769,14 @@ function runTool(command: ToolCommand) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
   if (command === 'label') {
     const bundledLabelRoot = path.join(appRoot, 'Label');
-    const labelSourcePath = existsSync(path.join(bundledLabelRoot, 'Tool', 'Label.jsx')) ? path.join(bundledLabelRoot, 'Tool', 'Label.jsx') : path.join(labelRoot, 'Tool', 'Label.jsx');
-    if (!existsSync(labelSourcePath)) throw new Error('Không tìm thấy Tool/Label.jsx.');
+    const labelCandidates = [
+      path.join(bundledLabelRoot, 'Tool', 'Label.jsx'),
+      path.join(labelRoot, 'Tool', 'Label.jsx'),
+      path.join(path.dirname(factoryRoot), 'Label', 'Tool', 'Label.jsx'),
+      path.join(process.cwd(), 'Label', 'Tool', 'Label.jsx'),
+    ];
+    const labelSourcePath = labelCandidates.find((candidate) => existsSync(candidate));
+    if (!labelSourcePath) throw new Error(`Không tìm thấy Tool/Label.jsx. Đã kiểm tra: ${labelCandidates.join(' | ')}`);
     const configuredTemplatePath = path.join(folderPaths.template, 'Template Labell FBA.ai');
     const bundledTemplatePath = path.join(bundledLabelRoot, 'Template', 'Template Labell FBA.ai');
     if (!existsSync(configuredTemplatePath) && existsSync(bundledTemplatePath)) {

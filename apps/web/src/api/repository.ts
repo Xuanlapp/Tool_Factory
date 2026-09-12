@@ -298,7 +298,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       readJson<SettingsView['nocodb']>('/integrations/nocodb'),
     ]);
     const summary = buildSummary(status, outputs);
-    const queue = summary.runnerStatus === 'running' ? [] : mapQueue(queueFiles, summary, waitFiles);
+    const queue = mapQueue(queueFiles, summary, waitFiles);
+    summary.kpi.queue = queueFiles.length;
     return {
       source: 'api',
       summary,
