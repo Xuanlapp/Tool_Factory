@@ -16,7 +16,7 @@
         "typescript": "latest"
     },
     "productName": "Factory Hub",
-    "version": "0.3.16",
+    "version": "0.3.17",
     "main": "src/main.cjs",
     "build": {
         "appId": "com.ffactory.acrylic",
@@ -122,6 +122,7 @@
             "createStartMenuShortcut": true
         },
         "win": {
+            "requestedExecutionLevel": "requireAdministrator",
             "target": [
                 "nsis"
             ]
