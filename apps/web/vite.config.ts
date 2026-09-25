@@ -956,7 +956,7 @@ async function scanFolder(root: string | undefined): Promise<FileEntry[]> {
       // Illustrator writes this temporary file while Save As is in progress.
       // It is not a usable wait sheet and must never appear in the queue.
       if (rootKey === 'wait' && (extension !== '.ai' || lowerName.endsWith('.saving.ai') || (isStickerProduct(activeProduct) ? !/(?:_wait_|^(?:fba_|fbm_)?wait(?:_holo)?_[0-9]+(?:_[0-9]+)?\.ai$)/i.test(entry.name) : !/^(?:fba_|fbm_)?wait_\d+(?:-\d+)?(?:_\d+_\d+)?\.ai$/i.test(entry.name)))) continue;
-      if (rootKey === 'output_ai' && (extension !== '.ai' || (activeProduct === 'acrylic' && !/^(?:Acrylic_\d{1,2}_\d{1,2}_\d{2}|wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
+      if (rootKey === 'output_ai' && (extension !== '.ai' || (activeProduct === 'acrylic' && !/^(?:(?:FBA_|FBM_)?Acrylic_\d{1,2}_\d{1,2}_\d{2}|(?:FBA_|FBM_)?wait_[^/\\]+_\d{1,2}_\d{1,2}_\d{2})\.ai$/i.test(entry.name)))) continue;
       if (rootKey === 'output_front' && (extension !== '.png' || !/_front\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_back' && (extension !== '.png' || !/_back\.png$/i.test(entry.name))) continue;
       if (rootKey === 'output_lazer' && (extension !== '.ai' || !/_lazer\.ai$/i.test(entry.name))) continue;
