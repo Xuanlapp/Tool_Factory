@@ -293,6 +293,26 @@ function nextAvailableMoveTarget(targetPath: string): string {
   while (existsSync(candidate)) { index += 1; candidate = `${stem} (${index})${extension}`; }
   return candidate;
 }
+function nextAvailableDesignTarget(folder: string, fileName: string): { target: string; fileName: string; skipped: boolean } {
+  const extension = path.extname(fileName);
+  const stem = fileName.slice(0, -extension.length);
+  const itemMatch = stem.match(/^(.*_item)(\d+)(_.+)$/i);
+  if (!itemMatch) {
+    const target = path.join(folder, fileName);
+    return { target, fileName, skipped: existsSync(target) };
+  }
+  const prefix = itemMatch[1];
+  const suffix = itemMatch[3];
+  let itemNumber = Number(itemMatch[2]);
+  let candidateName = fileName;
+  let candidate = path.join(folder, candidateName);
+  while (existsSync(candidate)) {
+    itemNumber += 1;
+    candidateName = `${prefix}${itemNumber}${suffix}${extension}`;
+    candidate = path.join(folder, candidateName);
+  }
+  return { target: candidate, fileName: candidateName, skipped: false };
+}
 function moveFolderContents(fromDir: string, toDir: string) {
   mkdirSync(toDir, { recursive: true });
   if (!existsSync(fromDir)) return;
@@ -1010,6 +1030,40 @@ function getGoogleDriveDownloadUrl(value: string) {
   return fileId ? `https://drive.usercontent.google.com/download?id=${fileId}&export=download&confirm=t` : value;
 }
 
+function getDesignDownloadUrl(value: string) {
+  const source = String(value ?? '').trim();
+  if (!/^https?:\/\//i.test(source)) throw new Error('Link Design phải bắt đầu bằng http:// hoặc https://.');
+  const googleUrl = getGoogleDriveDownloadUrl(source);
+  if (googleUrl !== source) return googleUrl;
+  const url = new URL(source);
+  if (/(^|\.)dropbox\.com$/i.test(url.hostname)) {
+    url.hostname = 'dl.dropboxusercontent.com';
+    url.searchParams.set('dl', '1');
+    return url.toString();
+  }
+  return url.toString();
+}
+
+function extensionFromDownloadedDesign(content: Buffer, contentType: string, contentDisposition: string, pdfOnly: boolean) {
+  if (content.subarray(0, 5).toString('ascii') === '%PDF-') return '.pdf';
+  if (content.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) return '.png';
+  if (content.subarray(0, 3).equals(Buffer.from([0xff, 0xd8, 0xff]))) return '.jpg';
+  if (content.subarray(0, 6).toString('ascii') === 'GIF87a' || content.subarray(0, 6).toString('ascii') === 'GIF89a') return '.gif';
+  if (content.subarray(0, 4).toString('ascii') === 'RIFF' && content.subarray(8, 12).toString('ascii') === 'WEBP') return '.webp';
+  if (content.subarray(0, 2).toString('ascii') === 'BM') return '.bmp';
+  const fileName = contentDisposition.match(/filename\*?=(?:UTF-8''|"?)([^";\r\n]+)/i)?.[1];
+  const extension = path.extname(decodeURIComponent(fileName ?? '')).toLowerCase();
+  if (pdfOnly && extension === '.pdf') return '.pdf';
+  if (!pdfOnly && ['.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.psd'].includes(extension)) return extension === '.jpeg' ? '.jpg' : extension === '.tiff' ? '.tif' : extension;
+  if (pdfOnly && /application\/pdf/i.test(contentType)) return '.pdf';
+  if (!pdfOnly && /image\/png/i.test(contentType)) return '.png';
+  if (!pdfOnly && /image\/jpe?g/i.test(contentType)) return '.jpg';
+  if (!pdfOnly && /image\/gif/i.test(contentType)) return '.gif';
+  if (!pdfOnly && /image\/webp/i.test(contentType)) return '.webp';
+  if (!pdfOnly && /image\/bmp/i.test(contentType)) return '.bmp';
+  return null;
+}
+
 function filenamePart(value: string, fallback: string) {
   const result = value.normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/đ/gi, 'd').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
   return result || fallback;
@@ -1078,19 +1132,18 @@ async function downloadDesignsFromWorkbook(payload: { fileBase64?: unknown; file
     try {
       const targetFolder = row.flow.toUpperCase() === 'FBA' ? (targetPaths.Images_FBA || targetPaths.Images) : row.flow.toUpperCase() === 'FBM' ? (targetPaths.Images_FBM || targetPaths.Images) : targetPaths.Images;
       mkdirSync(targetFolder, { recursive: true });
-      const response = await fetch(getGoogleDriveDownloadUrl(row.designUrl), { redirect: 'follow', signal: AbortSignal.timeout(120_000) });
+      const response = await fetch(getDesignDownloadUrl(row.designUrl), { redirect: 'follow', signal: AbortSignal.timeout(120_000) });
       const contentType = response.headers.get('content-type') ?? '';
-      if (!response.ok) throw new Error(`Google Drive trả về HTTP ${response.status}.`);
-      if (pdfOnly && contentType.startsWith('image/')) throw new Error('Chỉ nhận PDF cho Label. Không lưu file PNG/JPG hoặc ảnh khác.');
-      if (!pdfOnly && !contentType.startsWith('image/')) throw new Error('Link không trả về file ảnh; hãy kiểm tra quyền chia sẻ Google Drive.');
+      if (!response.ok) throw new Error(`Link trả về HTTP ${response.status}. Kiểm tra lại quyền chia sẻ hoặc URL tải trực tiếp.`);
       const image = Buffer.from(await response.arrayBuffer());
       if (!image.length) throw new Error('File ảnh tải về rỗng.');
-      if (pdfOnly && image.subarray(0, 5).toString('ascii') !== '%PDF-') throw new Error('File không phải PDF. Không lưu file này vào hàng chờ Label.');
-      const extension = pdfOnly ? '.pdf' : contentType.includes('jpeg') ? '.jpg' : contentType.includes('webp') ? '.webp' : contentType.includes('gif') ? '.gif' : '.png';
+      const extension = extensionFromDownloadedDesign(image, contentType, response.headers.get('content-disposition') ?? '', pdfOnly);
+      if (pdfOnly && extension !== '.pdf') throw new Error('Link không trả về PDF. Không lưu file này vào hàng chờ Label.');
+      if (!pdfOnly && !extension) throw new Error('Link không trả về file ảnh hợp lệ. Hãy dùng link công khai hoặc link tải trực tiếp (không phải trang xem file).');
       const baseName = row.fileName.replace(/\.[^.]+$/, '');
-      const target = nextAvailableMoveTarget(path.join(targetFolder, `${baseName}${extension}`));
-      writeFileSync(target, image);
-      results.push({ row: row.row, fileName: path.basename(target), ok: true, message: `Đã lưu vào ${targetFolder}` });
+      const nextTarget = nextAvailableDesignTarget(targetFolder, `${baseName}${extension}`);
+      writeFileSync(nextTarget.target, image);
+      results.push({ row: row.row, fileName: nextTarget.fileName, ok: true, message: nextTarget.fileName === `${baseName}${extension}` ? `Đã lưu vào ${targetFolder}` : `Tên đã tồn tại, tự tăng item lên ${nextTarget.fileName}` });
     } catch (error) {
       results.push({ row: row.row, fileName: row.fileName, ok: false, message: error instanceof Error ? error.message : 'Không thể tải ảnh.' });
     }
