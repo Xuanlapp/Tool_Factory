@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2, Download, FileSpreadsheet, Loader2, TriangleAlert, Upload } from 'lucide-react';
 import { apiBase } from '../api/client';
 import { Panel } from '../components/Panel';
@@ -9,6 +9,13 @@ type DownloadResult = { row: number; fileName: string; ok: boolean; message: str
 type ImportResult = { ok: boolean; message?: string; total: number; downloaded: number; failed: number; results: DownloadResult[] };
 
 const defaultPattern = '{{flow}}_{{orderId}}_{{item}}_{{productName}}-{{size}}-st_qty_{{quantity}}';
+
+type DownloadSnapshot = { running: boolean; message: string; rows: PreviewRow[]; result: ImportResult | null };
+let downloadSnapshot: DownloadSnapshot = { running: false, message: 'Chọn file Excel để đọc danh sách Link Design.', rows: [], result: null };
+let activeDownload: Promise<void> | null = null;
+let downloadFile: File | null = null;
+const downloadListeners = new Set<() => void>();
+function notifyDownloadSnapshot() { downloadListeners.forEach((listener) => listener()); }
 
 function DesignThumbnail({ url }: { url: string }) {
   const [failed, setFailed] = useState(false);
@@ -22,25 +29,30 @@ export function DesignDownloadPage() {
   const input = useRef<HTMLInputElement>(null);
   const [file, setFile] = useState<File | null>(null);
   const pattern = defaultPattern;
-  const [running, setRunning] = useState(false);
-  const [rows, setRows] = useState<PreviewRow[]>([]);
-  const [message, setMessage] = useState('Chọn file Excel để đọc danh sách Link Design.');
-  const [result, setResult] = useState<ImportResult | null>(null);
+  const [snapshot, setSnapshot] = useState(downloadSnapshot);
+  const { running, message, rows, result } = snapshot;
+
+  useEffect(() => {
+    const listener = () => setSnapshot({ ...downloadSnapshot, rows: [...downloadSnapshot.rows] });
+    downloadListeners.add(listener);
+    listener();
+    return () => { downloadListeners.delete(listener); };
+  }, []);
 
   const chooseFile = (next: File | null) => {
     if (running) return;
     setFile(next);
-    setRows([]);
-    setResult(null);
-    setMessage(next ? `Đã chọn ${next.name}.` : 'Chọn file Excel để đọc danh sách Link Design.');
+    downloadSnapshot = { ...downloadSnapshot, rows: [], result: null, message: next ? `Đã chọn ${next.name}.` : 'Chọn file Excel để đọc danh sách Link Design.' };
+    notifyDownloadSnapshot();
     if (next) void upload(true, next);
   };
 
-  const upload = async (previewOnly = false, selectedFile = file) => {
+  const upload = async (previewOnly = false, selectedFile = file ?? downloadFile) => {
     if (!selectedFile || running) return;
-    setRunning(true);
-    if (previewOnly) setResult(null);
-    setMessage(previewOnly ? 'Đang đọc Excel để xem trước...' : 'Đang tải toàn bộ ảnh...');
+    if (activeDownload) return;
+    downloadSnapshot = { ...downloadSnapshot, running: true, result: previewOnly ? null : downloadSnapshot.result, message: previewOnly ? 'Đang đọc Excel để xem trước...' : 'Đang tải toàn bộ ảnh...' };
+    notifyDownloadSnapshot();
+    activeDownload = (async () => {
     try {
       const buffer = await selectedFile.arrayBuffer();
       const bytes = new Uint8Array(buffer);
@@ -55,21 +67,25 @@ export function DesignDownloadPage() {
       if (previewOnly) {
         if (!response.ok) throw new Error(data.message || 'Không thể đọc Excel.');
         if (!data.rows?.length) throw new Error('Không tìm thấy dòng có Link Design trong sheet đầu tiên.');
-        setRows(data.rows);
-        setMessage('Kiểm tra ảnh và tên trong bảng, rồi bấm Download All.');
+        downloadSnapshot = { ...downloadSnapshot, rows: data.rows, message: 'Kiểm tra ảnh và tên trong bảng, rồi bấm Download All.' };
+        notifyDownloadSnapshot();
         return;
       }
       if (!response.ok && !data.results) throw new Error(data.message || 'Không thể tải ảnh.');
       const succeeded = new Set(data.results.filter(item => item.ok).map(item => item.row));
-      setRows(current => current.filter(row => !succeeded.has(row.row)));
-      setResult(data);
-      setMessage(`Đã tải ${data.downloaded}/${data.total} ảnh.${data.failed ? ` Có ${data.failed} ảnh lỗi.` : ''}`);
+      downloadSnapshot = { ...downloadSnapshot, rows: downloadSnapshot.rows.filter(row => !succeeded.has(row.row)), result: data, message: `Đã tải ${data.downloaded}/${data.total} ảnh.${data.failed ? ` Có ${data.failed} ảnh lỗi.` : ''}` };
+      notifyDownloadSnapshot();
       if (data.downloaded) window.dispatchEvent(new Event('acrylic:folders-changed'));
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : 'Không thể tải ảnh.');
+      downloadSnapshot = { ...downloadSnapshot, message: error instanceof Error ? error.message : 'Không thể tải ảnh.' };
+      notifyDownloadSnapshot();
     } finally {
-      setRunning(false);
+      downloadSnapshot = { ...downloadSnapshot, running: false };
+      activeDownload = null;
+      notifyDownloadSnapshot();
     }
+    })();
+    await activeDownload;
   };
 
   return <div className="space-y-6">

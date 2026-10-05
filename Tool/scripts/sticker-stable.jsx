@@ -2577,7 +2577,7 @@ KẾT LUẬN
 
                 freeRects.sort(function (r1, r2) {
                     if (r2.y !== r1.y) return r2.y - r1.y;
-                    return r1.x - r2.x;
+                    return r2.x - r1.x;
                 });
             }
 
@@ -2658,15 +2658,15 @@ KẾT LUẬN
             }
 
             function isSafeAgainstUsed(candidate) {
-                var candWithGap = {
+                var candidateRect = {
                     x: candidate.x,
                     y: candidate.y,
-                    w: candidate.w + gap,
-                    h: candidate.h + gap
+                    w: candidate.w,
+                    h: candidate.h
                 };
 
                 for (var i = 0; i < usedRects.length; i++) {
-                    if (rectsOverlap(candWithGap, usedRects[i])) return false;
+                    if (rectsOverlap(candidateRect, usedRects[i])) return false;
                 }
                 return true;
             }
@@ -2677,13 +2677,13 @@ KẾT LUẬN
                 if (useGridScanMode) {
                     // coarse grid scan (points) inside freeRects to find any
                     // placement that doesn't overlap usedRects (with gap).
-                    var step = Math.max(10, Math.round(gap));
+                    var step = Math.max(1, Math.round(gap / 4));
 
                     for (var i = 0; i < freeRects.length; i++) {
                         var r = freeRects[i];
 
                         for (var yy = r.y; yy - h >= r.y - r.h; yy -= step) {
-                            for (var xx = r.x; xx + w <= r.x + r.w; xx += step) {
+                            for (var xx = r.x + r.w - w; xx >= r.x; xx -= step) {
                                 var cand = { index: i, rect: r, rotated: false, x: xx, y: yy, w: w, h: h };
                                 if (isSafeAgainstUsed(cand)) return cand;
                             }
@@ -2694,7 +2694,7 @@ KẾT LUẬN
                         for (var i2 = 0; i2 < freeRects.length; i2++) {
                             var r2 = freeRects[i2];
                             for (var yy2 = r2.y; yy2 - w >= r2.y - r2.h; yy2 -= step) {
-                                for (var xx2 = r2.x; xx2 + h <= r2.x + r2.w; xx2 += step) {
+                                for (var xx2 = r2.x + r2.w - h; xx2 >= r2.x; xx2 -= step) {
                                     var candR = { index: i2, rect: r2, rotated: true, x: xx2, y: yy2, w: h, h: w };
                                     if (isSafeAgainstUsed(candR)) return candR;
                                 }
@@ -2714,7 +2714,7 @@ KẾT LUẬN
                         if (isSafeAgainstUsed(cand)) {
                             var scoreY = -r.y - h;
                             var scoreX = r.x;
-                            if (!best || scoreY > best.scoreY || (scoreY === best.scoreY && scoreX < best.scoreX)) {
+                            if (!best || scoreY > best.scoreY || (scoreY === best.scoreY && scoreX > best.scoreX)) {
                                 cand.scoreY = scoreY;
                                 cand.scoreX = scoreX;
                                 best = cand;
@@ -2728,7 +2728,7 @@ KẾT LUẬN
                         if (isSafeAgainstUsed(candRot)) {
                             var scoreYR = -r.y - w;
                             var scoreXR = r.x;
-                            if (!best || scoreYR > best.scoreY || (scoreYR === best.scoreY && scoreXR < best.scoreX)) {
+                            if (!best || scoreYR > best.scoreY || (scoreYR === best.scoreY && scoreXR > best.scoreX)) {
                                 candRot.scoreY = scoreYR;
                                 candRot.scoreX = scoreXR;
                                 best = candRot;
@@ -3333,5 +3333,3 @@ KẾT LUẬN
             return base + ext;
         }
     })();
-
-

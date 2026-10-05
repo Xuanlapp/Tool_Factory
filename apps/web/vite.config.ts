@@ -9,6 +9,7 @@ import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { PNG } from 'pngjs';
 import * as XLSX from 'xlsx';
+import unzipper from 'unzipper';
 
 type FileEntry = { path: string; relativePath: string; name: string; sizeBytes: number; modifiedAt: string; errorMeta?: Record<string, unknown>; waitManifest?: Record<string, unknown> };
 type DownloadDesignRow = { row: number; flow: string; item: string; orderId: string; productName: string; productId: string; quantity: string; size: string; designUrl: string; fileName: string };
@@ -930,7 +931,6 @@ async function runAcrylicTestFromImage(inputPath: string, sideCount: number) {
   return { ok: true, message: `Đã tạo bản sao test và đang chạy: ${path.basename(testPath)}`, run: activeRun };
 }
 
-ensureOperationMonitor();
 async function scanFolder(root: string | undefined): Promise<FileEntry[]> {
   if (!root) return [];
   const folderRoot = root;
@@ -1014,6 +1014,8 @@ async function snapshot(force = false): Promise<Snapshot> {
   return snapshotPromise;
 }
 
+ensureOperationMonitor();
+
 function json(response: import('node:http').ServerResponse, value: unknown, statusCode = 200) {
   response.statusCode = statusCode;
   response.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -1037,9 +1039,8 @@ function getDesignDownloadUrl(value: string) {
   if (googleUrl !== source) return googleUrl;
   const url = new URL(source);
   if (/(^|\.)dropbox\.com$/i.test(url.hostname)) {
-    url.hostname = 'dl.dropboxusercontent.com';
+    // Keep /scl/fo links on Dropbox so it can resolve the shared file redirect.
     url.searchParams.set('dl', '1');
-    return url.toString();
   }
   return url.toString();
 }
@@ -1110,7 +1111,11 @@ function parseDesignWorkbook(encodedFile: string, fileName: string, pattern: str
       orderId: find('Order ID'),
       productName: find('Product Name'),
       productId: find('Product ID'),
-      quantity: find('Quantity'),
+      quantity: (() => {
+        const value = find('Quantity');
+        const parsed = Number(value.replace(',', '.'));
+        return !value || (Number.isFinite(parsed) && parsed <= 0) ? '1' : value;
+      })(),
       size: find('Size'),
       designUrl: find('Link Design'),
     };
@@ -1137,14 +1142,32 @@ async function downloadDesignsFromWorkbook(payload: { fileBase64?: unknown; file
       if (!response.ok) throw new Error(`Link trả về HTTP ${response.status}. Kiểm tra lại quyền chia sẻ hoặc URL tải trực tiếp.`);
       const image = Buffer.from(await response.arrayBuffer());
       if (!image.length) throw new Error('File ảnh tải về rỗng.');
-      const extension = extensionFromDownloadedDesign(image, contentType, response.headers.get('content-disposition') ?? '', pdfOnly);
-      if (pdfOnly && extension !== '.pdf') throw new Error('Link không trả về PDF. Không lưu file này vào hàng chờ Label.');
-      if (!pdfOnly && !extension) throw new Error('Link không trả về file ảnh hợp lệ. Hãy dùng link công khai hoặc link tải trực tiếp (không phải trang xem file).');
+      const isZip = image.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04])) || /zip/i.test(contentType);
       const baseName = row.fileName.replace(/\.[^.]+$/, '');
-      const nextTarget = nextAvailableDesignTarget(targetFolder, `${baseName}${extension}`);
-      writeFileSync(nextTarget.target, image);
-      results.push({ row: row.row, fileName: nextTarget.fileName, ok: true, message: nextTarget.fileName === `${baseName}${extension}` ? `Đã lưu vào ${targetFolder}` : `Tên đã tồn tại, tự tăng item lên ${nextTarget.fileName}` });
-    } catch (error) {
+      if (isZip && !pdfOnly) {
+        const archive = await unzipper.Open.buffer(image);
+        const pngEntries = archive.files.filter((entry: { type: string; path: string; buffer(): Promise<Buffer> }) => entry.type === 'File' && /\.png$/i.test(entry.path));
+        if (!pngEntries.length) throw new Error('Folder không có file PNG nào. JPG/PDF và định dạng khác được bỏ qua.');
+        let saved = 0;
+        for (const entry of pngEntries) {
+          const entryImage = await entry.buffer();
+          if (!extensionFromDownloadedDesign(entryImage, 'image/png', '', false)) continue;
+          const itemName = 'item' + String(saved + 1);
+          const itemFileName = row.fileName.replace(/_item\d+(?=_)/i, '_' + itemName);
+          const nextTarget = nextAvailableDesignTarget(targetFolder, itemFileName);
+          writeFileSync(nextTarget.target, entryImage);
+          saved += 1;
+        }
+        if (!saved) throw new Error('Folder không có PNG hợp lệ. JPG/PDF và định dạng khác được bỏ qua.');
+        results.push({ row: row.row, fileName: baseName + ' (đã lưu ' + saved + ' PNG)', ok: true, message: 'Đã lưu ' + saved + ' PNG vào ' + targetFolder + '; dùng item1 đến item' + saved + '. JPG/PDF và định dạng khác được bỏ qua.' });
+      } else {
+        const extension = extensionFromDownloadedDesign(image, contentType, response.headers.get('content-disposition') ?? '', pdfOnly);
+        if (pdfOnly && extension !== '.pdf') throw new Error('Link không trả về PDF. Không lưu file này vào hàng chờ Label.');
+        if (!pdfOnly && extension !== '.png') throw new Error('Chỉ nhận file PNG. JPG/PDF và định dạng khác không được tải.');
+        const nextTarget = nextAvailableDesignTarget(targetFolder, baseName + extension);
+        writeFileSync(nextTarget.target, image);
+        results.push({ row: row.row, fileName: nextTarget.fileName, ok: true, message: nextTarget.fileName === baseName + extension ? 'Đã lưu vào ' + targetFolder : 'Tên đã tồn tại, tự tăng item lên ' + nextTarget.fileName });
+      }    } catch (error) {
       results.push({ row: row.row, fileName: row.fileName, ok: false, message: error instanceof Error ? error.message : 'Không thể tải ảnh.' });
     }
   }

@@ -2720,10 +2720,10 @@ function contactScoreAgainstObstacles(bounds, obstacles) {
     var rightGap = Math.abs(bounds.right - obstacle.left);
     var topGap = Math.abs(bounds.top - obstacle.bottom);
     var bottomGap = Math.abs(bounds.bottom - obstacle.top);
-    if (Math.abs(leftGap - PACK_GAP_POINT) <= tolerance && verticalOverlap > 0) score += 10000 + verticalOverlap;
-    if (Math.abs(rightGap - PACK_GAP_POINT) <= tolerance && verticalOverlap > 0) score += 9000 + verticalOverlap;
-    if (Math.abs(topGap - PACK_GAP_POINT) <= tolerance && horizontalOverlap > 0) score += 12000 + horizontalOverlap;
-    if (Math.abs(bottomGap - PACK_GAP_POINT) <= tolerance && horizontalOverlap > 0) score += 7000 + horizontalOverlap;
+    if (Math.abs(leftGap - PACK_GAP_POINT) <= tolerance && verticalOverlap > 0) score += 30000 + verticalOverlap;
+    if (Math.abs(rightGap - PACK_GAP_POINT) <= tolerance && verticalOverlap > 0) score += 24000 + verticalOverlap;
+    if (Math.abs(topGap - PACK_GAP_POINT) <= tolerance && horizontalOverlap > 0) score += 3000 + horizontalOverlap;
+    if (Math.abs(bottomGap - PACK_GAP_POINT) <= tolerance && horizontalOverlap > 0) score += 2500 + horizontalOverlap;
   }
   return score;
 }
@@ -2774,11 +2774,13 @@ function placementScore(bounds, templateBounds, obstacles, rowIndex) {
   if (touches.left) score += 700000;
   if (touches.bottom) score += 400000;
   if (touches.right) score += 200000;
-  score += contactScoreAgainstObstacles(bounds, obstacles) * (rowIndex > 0 ? 25 : 10);
+  // Acrylic/Acrylic Holo use deterministic row-major packing: top rows first, then left-to-right.
+  // Keep contact with existing items as a tie-breaker, not as a reason to jump to a lower row.
+  score += contactScoreAgainstObstacles(bounds, obstacles) * (rowIndex > 0 ? 3 : 2);
   score -= packed.height * 10000;
   score -= (packed.width * packed.height) * 2;
-  score -= (templateBounds.top - bounds.top) * 100;
-  score -= (bounds.left - templateBounds.left) * 5;
+  score -= (templateBounds.top - bounds.top) * 10000;
+  score -= (bounds.left - templateBounds.left) * 10;
   return score;
 }
 
@@ -3306,21 +3308,19 @@ function chooseBestPlacementForItem(outline, templateBounds, obstacles, obstacle
       if (!boundsInsideTemplate(placed, templateBounds)) continue;
       if (collidesOrTooClose(placed, obstacles)) continue;
 
-      var contactScore = countTemplateTouches(placed, templateBounds) * 100000;
+      var contactScore = -(templateBounds.top - placed.top) * 100 - (placed.left - templateBounds.left);
       var overlapTolerance = Math.max(1.5, PACK_GAP_POINT + 1.5);
       for (var obstacleIndex = 0; obstacleIndex < obstacles.length; obstacleIndex += 1) {
         var obstacle = obstacles[obstacleIndex];
         var horizontalOverlap = Math.max(0, Math.min(placed.right, obstacle.right) - Math.max(placed.left, obstacle.left));
         var verticalOverlap = Math.max(0, Math.min(placed.top, obstacle.top) - Math.max(placed.bottom, obstacle.bottom));
         if (horizontalOverlap > 1.5) {
-          if (Math.abs(placed.bottom - obstacle.top) <= overlapTolerance || Math.abs(placed.top - obstacle.bottom) <= overlapTolerance) contactScore += 10000 + horizontalOverlap;
+          if (Math.abs(placed.bottom - obstacle.top) <= overlapTolerance || Math.abs(placed.top - obstacle.bottom) <= overlapTolerance) contactScore += 1000 + horizontalOverlap;
         }
         if (verticalOverlap > 1.5) {
-          if (Math.abs(placed.left - obstacle.right) <= overlapTolerance || Math.abs(placed.right - obstacle.left) <= overlapTolerance) contactScore += 10000 + verticalOverlap;
+          if (Math.abs(placed.left - obstacle.right) <= overlapTolerance || Math.abs(placed.right - obstacle.left) <= overlapTolerance) contactScore += 20000 + verticalOverlap;
         }
       }
-      // Prefer the upper-leftmost candidate only after maximizing edge contact.
-      contactScore -= ((placed.left - templateBounds.left) + (templateBounds.top - placed.top)) * 0.01;
       var dx = placed.left - rotatedBounds.left;
       var dy = placed.top - rotatedBounds.top;
       if (bestFreePlacement === null || contactScore > bestFreePlacement.score) {
