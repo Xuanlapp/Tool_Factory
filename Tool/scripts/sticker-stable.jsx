@@ -134,9 +134,11 @@ KẾT LUẬN
         var ACTION_MERGE = "Merge";
         var ACTION_UNITE = "Unite";
         var AUTO_LAYER_PREFIX = "__AUTO_BATCH__ ";
-        var FAST_MODE = true;
-        var MAX_IMAGES_BEFORE_WAIT = 50;
-        var SLEEP_SCALE = 0.22;
+         var FAST_MODE = true;
+         var MAX_IMAGES_BEFORE_WAIT = 50;
+         var FLOW_PREFIX = typeof CODEX_FLOW_PREFIX !== "undefined" ? String(CODEX_FLOW_PREFIX).toUpperCase() : "";
+         var IS_FBM_FLOW = FLOW_PREFIX === "FBM";
+         var SLEEP_SCALE = 0.22;
         var MIN_SLEEP = 50;
         var SHOW_WAIT_FIT_PREVIEW = false;
         var OLD_USER_INTERACTION_LEVEL = app.userInteractionLevel;
@@ -398,22 +400,13 @@ KẾT LUẬN
                     var jobKey = getFileKey(file);
                     var sizeKey = toSizeKey(info.inch);
 
-                    // Náº¿u size nÃ y Ä‘Ã£ fail fit trÃªn sheet hiá»‡n táº¡i,
-                    // bá» qua toÃ n bá»™ job cÃ¹ng size Ä‘á»ƒ chuyá»ƒn sang size nhá» hÆ¡n.
+                    // Chỉ bỏ qua size sau lần thử thứ hai trên sheet hiện tại.
                     if (blockedSizeKeys[sizeKey]) {
                         continue;
                     }
 
-                    // Náº¿u file fail quÃ¡ 2 láº§n trong cÃ¹ng vÃ²ng láº·p, xÃ³a nÃ³
+                    // Không chuyển file lỗi chỉ vì không còn chỗ trên sheet.
                     if (!jobFailureCount[jobKey]) jobFailureCount[jobKey] = 0;
-                    if (jobFailureCount[jobKey] >= 2) {
-                        $.writeln("File bá»‹ stuck (fail 2+ láº§n): " + file.fsName);
-                        moveFileToErrorFolder(file, errorFolder);
-                        pendingJobs.splice(j, 1);
-                        delete jobFailureCount[jobKey];
-                        j--;
-                        continue;
-                    }
 
                     try {
                         requireStickerDocument(doc, file.name, "before-artwork");
@@ -460,12 +453,12 @@ KẾT LUẬN
                             // sheet then put the renamed remaining qty on a new
                             // template instead of silently ending the job.
                             if (info.remainingQtyForNextSheet > 0) {
-                                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder);
                                 var remainingName = buildFileNameWithQty(info, info.remainingQtyForNextSheet, getExt(file.name));
                                 pendingJobs[j].file = new File(file.parent.fsName + "/" + remainingName);
                                 info.qty = info.remainingQtyForNextSheet;
                                 delete info.remainingQtyForNextSheet;
                                 pendingJobs[j].info = info;
+                                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder, false, null, pendingJobs, true);
                                 blockedSizeKeys = {};
                                 openNextStickerSheet();
                                 placedSomethingThisRound = true;
@@ -478,15 +471,14 @@ KẾT LUẬN
                             j--;
                             placedSomethingThisRound = true;
 
-                            if (currentSheetDoneFiles.length >= MAX_IMAGES_BEFORE_WAIT) {
-                                $.writeln("Reached wait threshold: " + currentSheetDoneFiles.length + " images. Saving as wait and closing app.");
-                                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder, true, info.inch);
-                                if (pendingJobs.length > 0) {
-                                    openNextStickerSheet();
-                                    continue;
-                                }
-                                stoppedByUser = true;
-                                break;
+                            // FBM giữ checkpoint để Illustrator không giữ quá nhiều
+                            // artwork trong một document. FBA không giới hạn checkpoint.
+                            if (IS_FBM_FLOW && pendingJobs.length > 0 && currentSheetDoneFiles.length >= MAX_IMAGES_BEFORE_WAIT) {
+                                $.writeln("FBM checkpoint: " + currentSheetDoneFiles.length + " files. Save output and continue on a new sheet.");
+                                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder, false, null, pendingJobs, true);
+                                openNextStickerSheet();
+                                placedSomethingThisRound = true;
+                                continue;
                             }
 
                             continue;
@@ -494,25 +486,16 @@ KẾT LUẬN
 
                         // KhÃ´ng fit thÃ¬ increment fail counter
                         jobFailureCount[jobKey]++;
-                        blockedSizeKeys[sizeKey] = true;
-                        $.writeln("Skip size on current sheet (no fit): " + info.sizeText + " | " + file.name);
+                        if (jobFailureCount[jobKey] >= 2) {
+                            blockedSizeKeys[sizeKey] = true;
+                            $.writeln("Skip size after retry (no fit): " + info.sizeText + " | " + file.name);
+                        } else {
+                            $.writeln("Retry size once (no fit): " + info.sizeText + " | " + file.name);
+                            placedSomethingThisRound = true;
+                        }
 
                         // NÃªu size <= 1.5in hoặc 2.5in khÃ´ng fit thÃ¬ save ngay vÃ  dá»«ng
-                        if (info.inch <= 1.5 || Math.abs(info.inch - 2.5) < 0.01) {
-                            $.writeln("Size " + info.sizeText + " khÃ´ng fit, save ngay vÃ  dá»«ng.");
-
-                            if (currentSheetIds.length > 0) {
-                                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder);
-                                if (pendingJobs.length > 0) {
-                                    openNextStickerSheet();
-                                    continue;
-                                }
-                            }
-
-                            stoppedByUser = true;
-                            break;
-                        }
-                        // GiÆ°ỡ láº¡i, thá»­ file nháº» hÆ¡n tiáº¿p theo
+                        // Keep trying every smaller pending size on the current sheet.
                         continue;
 
                     } catch (errJob) {
@@ -536,7 +519,26 @@ KẾT LUẬN
                 // ÄÃ£ thá»­ háº¿t mÃ  khÃ´ng file nÃ o fit ná»¯a thÃ¬ má»›i save sheet
                 if (!placedSomethingThisRound) {
                     if (currentSheetIds.length > 0) {
-                        saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder);
+                        var smallestBlockedSize = null;
+                        for (var blockedKey in blockedSizeKeys) {
+                            if (!blockedSizeKeys[blockedKey]) continue;
+                            var blockedInch = Number(blockedKey);
+                            if (!isNaN(blockedInch) && (smallestBlockedSize === null || blockedInch < smallestBlockedSize)) {
+                                smallestBlockedSize = blockedInch;
+                            }
+                        }
+                        var hasPendingSmallerSize = false;
+                        if (smallestBlockedSize !== null) {
+                            for (var pendingSizeIndex = 0; pendingSizeIndex < pendingJobs.length; pendingSizeIndex++) {
+                                var pendingSizeInfo = pendingJobs[pendingSizeIndex] && pendingJobs[pendingSizeIndex].info;
+                                if (pendingSizeInfo && Number(pendingSizeInfo.inch) < smallestBlockedSize) {
+                                    hasPendingSmallerSize = true;
+                                    break;
+                                }
+                            }
+                        }
+                        var forceOutputWhenNoSmallerSize = smallestBlockedSize !== null && !hasPendingSmallerSize;
+                        saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder, false, null, pendingJobs, forceOutputWhenNoSmallerSize);
                         if (pendingJobs.length > 0) {
                             openNextStickerSheet();
                             continue;
@@ -741,7 +743,7 @@ KẾT LUẬN
             }
 
             if (currentSheetIds.length > 0) {
-                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder);
+                saveCurrentSheetAs(doc, outFolder, currentSheetIds, waitMetaFolder, doneFolder, false, null, pendingJobs);
 
                 if (SHOULD_CLOSE_AFTER_SAVE) {
                     try {
@@ -1130,7 +1132,7 @@ KẾT LUẬN
             }
         }
 
-        function saveCurrentSheetAs(doc, outFolder, idList, waitMetaFolder, doneFolder, forceWaitSave, waitInchOverride) {
+        function saveCurrentSheetAs(doc, outFolder, idList, waitMetaFolder, doneFolder, forceWaitSave, waitInchOverride, pendingJobsForSheet, forceOutputSave) {
             if (!outFolder.exists) outFolder.create();
             if (!noteDoneFolder.exists) noteDoneFolder.create();
             if (!waitFolder.exists) waitFolder.create();
@@ -1139,7 +1141,15 @@ KẾT LUẬN
             var flowPrefix = typeof CODEX_FLOW_PREFIX !== "undefined" ? String(CODEX_FLOW_PREFIX).toUpperCase() : "";
             var baseName = RUN_WAIT_MODE ? WAIT_BASE_NAME : (flowPrefix ? flowPrefix + "_" : "") + makeTimeFileName();
             var waitInfo = getWaitInfo(packer);
-            var isWaitSave = (forceWaitSave === true) || (waitInfo && waitInfo.count > 0);
+            var hasPendingWaitCandidate = true;
+            if (pendingJobsForSheet && pendingJobsForSheet.length) {
+                hasPendingWaitCandidate = false;
+                for (var pendingIndex = 0; pendingIndex < pendingJobsForSheet.length; pendingIndex++) {
+                    var pendingInfo = pendingJobsForSheet[pendingIndex] && pendingJobsForSheet[pendingIndex].info;
+                    if (pendingInfo && Number(pendingInfo.inch) >= 3) { hasPendingWaitCandidate = true; break; }
+                }
+            }
+            var isWaitSave = (forceWaitSave === true) || (forceOutputSave !== true && waitInfo && waitInfo.count > 0 && hasPendingWaitCandidate);
 
             if (forceWaitSave && !waitInfo) {
                 waitInfo = {
@@ -1440,13 +1450,6 @@ KẾT LUẬN
 
                 $.writeln("Saved as wait: keeping wait file and meta for next resume: " + saveBaseName + ".ai/.txt/.json");
             }
-
-            // Ensure we stop further processing and close app immediately after save
-            stoppedByUser = true;
-
-            try {
-               app.quit();
-            } catch (e) { }
 
             return;
         }
