@@ -2709,11 +2709,11 @@ KẾT LUẬN
                     var r = freeRects[i];
 
                     if (w <= r.w && h <= r.h) {
-                        var cand = { index: i, rect: r, rotated: false, x: r.x, y: r.y, w: w, h: h };
+                        var cand = { index: i, rect: r, rotated: false, x: r.x + r.w - w, y: r.y, w: w, h: h };
 
                         if (isSafeAgainstUsed(cand)) {
                             var scoreY = -r.y - h;
-                            var scoreX = r.x;
+                            var scoreX = cand.x;
                             if (!best || scoreY > best.scoreY || (scoreY === best.scoreY && scoreX > best.scoreX)) {
                                 cand.scoreY = scoreY;
                                 cand.scoreX = scoreX;
@@ -2723,11 +2723,11 @@ KẾT LUẬN
                     }
 
                     if (allowRotate && h <= r.w && w <= r.h) {
-                        var candRot = { index: i, rect: r, rotated: true, x: r.x, y: r.y, w: h, h: w };
+                        var candRot = { index: i, rect: r, rotated: true, x: r.x + r.w - h, y: r.y, w: h, h: w };
 
                         if (isSafeAgainstUsed(candRot)) {
                             var scoreYR = -r.y - w;
-                            var scoreXR = r.x;
+                            var scoreXR = candRot.x;
                             if (!best || scoreYR > best.scoreY || (scoreYR === best.scoreY && scoreXR > best.scoreX)) {
                                 candRot.scoreY = scoreYR;
                                 candRot.scoreX = scoreXR;
