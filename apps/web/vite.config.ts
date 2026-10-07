@@ -790,9 +790,13 @@ function runTool(command: ToolCommand) {
   if (activeRun?.status === 'running') return { ok: false, message: 'Đang có tiến trình khác chạy.', run: activeRun };
   if (command === 'label') {
     const bundledLabelRoot = path.join(appRoot, 'Label');
+    const externalLabelRoot = path.join(path.dirname(factoryRoot), 'Label');
+    const documentsLabelRoot = path.join(process.env.USERPROFILE ?? process.env.HOME ?? '', 'Documents', 'AcrylicFactory', 'Label');
     const labelCandidates = [
       path.join(bundledLabelRoot, 'Tool', 'Label.jsx'),
       path.join(labelRoot, 'Tool', 'Label.jsx'),
+      path.join(externalLabelRoot, 'Tool', 'Label.jsx'),
+      path.join(documentsLabelRoot, 'Tool', 'Label.jsx'),
       path.join(path.dirname(factoryRoot), 'Label', 'Tool', 'Label.jsx'),
       path.join(process.cwd(), 'Label', 'Tool', 'Label.jsx'),
     ];
