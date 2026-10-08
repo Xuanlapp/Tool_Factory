@@ -77,7 +77,7 @@ export function parseFileIdentity(name: string) {
   const sizeInch = parseSizeInch(name);
   const qty = parseQty(name);
   const sideCount = parseSideCount(name);
-  const orderId = name.match(/^(\d+)/)?.[1] ?? '—';
+  const orderId = name.match(/^(?:(?:FBA|FBM)_)?(\d+)/i)?.[1] ?? '—';
   const itemId = lower.match(/(item\d+)/)?.[1] ?? '—';
   const sideLabel = lower.includes('badge-reel') ? `${sideCount}side` : `${sideCount}-side`;
   const sizeLabel = sizeInch > 0 ? `${String(sizeInch).replace('.', '-')}in` : '—';

@@ -12,7 +12,7 @@ import * as XLSX from 'xlsx';
 import unzipper from 'unzipper';
 
 type FileEntry = { path: string; relativePath: string; name: string; sizeBytes: number; modifiedAt: string; errorMeta?: Record<string, unknown>; waitManifest?: Record<string, unknown> };
-type DownloadDesignRow = { row: number; flow: string; item: string; orderId: string; productName: string; productId: string; quantity: string; size: string; designUrl: string; fileName: string };
+type DownloadDesignRow = { row: number; flow: string; item: string; orderId: string; productName: string; productId: string; quantity: string; size: string; name: string; designUrl: string; fileName: string };
 type DownloadDesignResult = { row: number; fileName: string; ok: boolean; message: string };
 
 function fixVietnameseMojibake(value: unknown): unknown {
@@ -976,7 +976,8 @@ async function scanFolder(root: string | undefined): Promise<FileEntry[]> {
         const manifestPath = fullPath.replace(/\.ai$/i, '.manifest.json');
         try { waitManifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as Record<string, unknown>; } catch {}
       }
-      files.push({ path: fullPath, relativePath: path.relative(folderRoot, fullPath), name: entry.name, sizeBytes: info.size, modifiedAt: info.mtime.toISOString(), errorMeta: errorMetadata[entry.name], waitManifest });
+       const textContent = rootKey === 'note_done' && extension === '.txt' ? readFileSync(fullPath, 'utf8') : undefined;
+       files.push({ path: fullPath, relativePath: path.relative(folderRoot, fullPath), name: entry.name, sizeBytes: info.size, modifiedAt: info.mtime.toISOString(), errorMeta: errorMetadata[entry.name], waitManifest, textContent });
     }
   }
   await walk(root);
@@ -1075,6 +1076,8 @@ function filenamePart(value: string, fallback: string) {
 }
 
 function buildDesignFileName(row: Omit<DownloadDesignRow, 'fileName'>, pattern: string) {
+  const legacyPattern = '{{flow}}_{{orderId}}_{{item}}_{{productName}}-{{size}}-st_qty_{{quantity}}';
+  const patternWithName = '{{flow}}_{{orderId}}_{{item}}_{{productName}}-st_{{name}}_qty_{{quantity}}';
   const values: Record<string, string> = {
     flow: filenamePart(row.flow, 'design').toUpperCase(),
     orderId: filenamePart(row.orderId, '0'),
@@ -1083,10 +1086,12 @@ function buildDesignFileName(row: Omit<DownloadDesignRow, 'fileName'>, pattern: 
     productName: filenamePart(row.productName, 'design'),
     quantity: filenamePart(row.quantity, '1'),
     size: filenamePart(row.size, ''),
+    name: filenamePart(row.name, ''),
     row: String(row.row),
   };
-  const stem = (pattern || '{{flow}}_{{orderId}}_{{item}}_{{productName}}-{{size}}-st_qty_{{quantity}}')
-    .replace(/{{(flow|item|orderId|productId|productName|size|quantity|row)}}/g, (_, key: string) => values[key])
+  const effectivePattern = row.name && pattern === legacyPattern ? patternWithName : (pattern || legacyPattern);
+  const stem = effectivePattern
+    .replace(/{{(flow|item|orderId|productId|productName|size|name|quantity|row)}}/g, (_, key: string) => values[key])
     .replace(/[^a-zA-Z0-9._-]+/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-+|-+$/g, '');
@@ -1115,6 +1120,7 @@ function parseDesignWorkbook(encodedFile: string, fileName: string, pattern: str
       orderId: find('Order ID'),
       productName: find('Product Name'),
       productId: find('Product ID'),
+      name: find('Name'),
       quantity: (() => {
         const value = find('Quantity');
         const parsed = Number(value.replace(',', '.'));

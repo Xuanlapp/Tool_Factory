@@ -762,7 +762,7 @@ function createNameLabels(doc, info, boxes, startIndex, count) {
     var firstBox = boxes[startIndex];
     if (!firstBox) return;
 
-    var textValue = info.id + " - " + info.name;
+    var textValue = info.id + " - " + getDisplayName(info.name);
     var color = getNameColor(info.id);
 
     var rowsPerColumn = boxes.rowsPerColumn;
@@ -1322,6 +1322,15 @@ function hideTemplateLayersBeforeSave(doc) {
             layer.visible = false;
         } catch (e) { }
     }
+}
+
+function getDisplayName(itemName) {
+    var value = trimText(itemName);
+    var separatorIndex = value.lastIndexOf("_");
+    if (separatorIndex >= 0 && separatorIndex < value.length - 1) {
+        value = value.substring(separatorIndex + 1);
+    }
+    return trimText(value.replace(/[-_]+$/g, ""));
 }
 
 function buildOutputName(info, outputFolder) {

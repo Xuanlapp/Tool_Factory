@@ -139,7 +139,17 @@ function stripDoneBase(name: string) {
   return name.replace(/_\d+(?:-\d+)?in_qty_\d+\.[a-z0-9]+$/i, '').replace(/_qty_\d+\.[a-z0-9]+$/i, '').replace(/\.[a-z0-9]+$/i, '');
 }
 
-function mapDone(files: FolderFileEntry[]): DoneItem[] {
+function mapDone(files: FolderFileEntry[], noteFiles: FolderFileEntry[] = [], outputFiles: FolderFileEntry[] = []): DoneItem[] {
+  const sheetById = new Map<string, string>();
+  for (const note of noteFiles) {
+    const sheet = note.name.replace(/\.txt$/i, '.ai');
+    for (const id of String(note.textContent ?? '').split(/[^0-9]+/).filter(Boolean)) sheetById.set(id, sheet);
+  }
+  const sheetByOrder = new Map<string, string>();
+  for (const file of outputFiles) {
+    const match = file.name.match(/^(?:FBA_|FBM_)?(\d+)_/i);
+    if (match) sheetByOrder.set(match[1], file.name);
+  }
   return byDateDesc(files).map((file) => {
     const parsed = parseItemName(file.name);
     const relative = file.relativePath ?? file.name;
@@ -154,7 +164,7 @@ function mapDone(files: FolderFileEntry[]): DoneItem[] {
       side: parsed.side,
       requestedQty: parsed.qty,
       placedQty: parsed.qty,
-      sheet: 'Chưa có dữ liệu',
+      sheet: sheetById.get(parsed.orderId) ?? sheetByOrder.get(parsed.orderId) ?? 'Chưa có dữ liệu',
       completedAt: fileTime(file),
       completedDate: dateMatch ? dateMatch[1] : fileDate(file),
       status: 'complete',
@@ -305,8 +315,8 @@ export async function getDashboardData(): Promise<DashboardData> {
       summary,
       queue,
       sheet: mapSheet(summary, waitFiles, [...(status?.folders.Images ?? []).map((file) => ({ ...file, previewScope: 'Images' })), ...(status?.folders.imgaes_done ?? []).map((file) => ({ ...file, previewScope: 'imgaes_done' })), ...(status?.folders.images_error ?? []).map((file) => ({ ...file, previewScope: 'images_error' }))]),
-      done: mapDone(status?.folders.imgaes_done ?? []),
-      processed: mapDone(status?.folders.images_processed ?? []),
+       done: mapDone(status?.folders.imgaes_done ?? [], status?.folders.note_done ?? [], outputs.ai ?? []),
+       processed: mapDone(status?.folders.images_processed ?? [], status?.folders.note_done ?? [], outputs.ai ?? []),
       errors: mapErrors(errorFiles),
       outputs: mapOutputs(outputs),
       history: mapHistory(events, summary),
